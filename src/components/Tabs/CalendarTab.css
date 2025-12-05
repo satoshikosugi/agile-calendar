@@ -1,0 +1,76 @@
+.calendar-tab {
+  max-width: 800px;
+}
+
+.calendar-tab h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.calendar-tab h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  margin-top: 24px;
+}
+
+.calendar-info {
+  background-color: #f5f5f5;
+  padding: 16px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.calendar-info p {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.calendar-info p:last-child {
+  margin-bottom: 0;
+}
+
+.calendar-actions {
+  margin-bottom: 30px;
+}
+
+.calendar-navigation {
+  margin-bottom: 30px;
+}
+
+.nav-buttons {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.nav-buttons .btn {
+  min-width: 150px;
+}
+
+.current-month {
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  flex: 1;
+  color: #4262ff;
+}
+
+.calendar-description {
+  border-top: 1px solid #ddd;
+  padding-top: 20px;
+}
+
+.calendar-description ul {
+  list-style: disc;
+  padding-left: 24px;
+}
+
+.calendar-description li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #666;
+}

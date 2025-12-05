@@ -1,0 +1,167 @@
+.tasks-tab {
+  display: flex;
+  gap: 20px;
+  height: 100%;
+}
+
+.tasks-list {
+  flex: 1;
+  min-width: 300px;
+  max-width: 400px;
+}
+
+.tasks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.tasks-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.task-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-item {
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.task-item:hover {
+  background-color: #f5f5f5;
+  border-color: #4262ff;
+}
+
+.task-item.selected {
+  background-color: #e8f0ff;
+  border-color: #4262ff;
+}
+
+.task-title {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.task-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: #666;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-draft {
+  background-color: #f0f0f0;
+  color: #666;
+}
+
+.status-planned {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-scheduled {
+  background-color: #d1ecf1;
+  color: #0c5460;
+}
+
+.status-done {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-canceled {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.task-date {
+  color: #666;
+}
+
+.no-tasks {
+  text-align: center;
+  color: #999;
+  padding: 40px 20px;
+}
+
+.task-detail {
+  flex: 2;
+  border-left: 1px solid #ddd;
+  padding-left: 20px;
+}
+
+.task-detail h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.time-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.time-inputs input {
+  flex: 1;
+}
+
+.time-inputs span {
+  color: #666;
+}
+
+.task-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-field {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.task-field strong {
+  display: inline-block;
+  min-width: 140px;
+  color: #666;
+}
+
+.task-field a {
+  color: #4262ff;
+  text-decoration: none;
+}
+
+.task-field a:hover {
+  text-decoration: underline;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
