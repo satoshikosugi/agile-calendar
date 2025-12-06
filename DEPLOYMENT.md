@@ -1,163 +1,163 @@
-# Deployment Guide for Agile Calendar Miro App
+# Agile Calendar Miro App デプロイガイド
 
-This guide explains how to deploy the Agile Calendar application as a Miro Web SDK app.
+このガイドでは、Agile CalendarアプリケーションをMiro Web SDKアプリとしてデプロイする方法を説明します。
 
-## Prerequisites
+## 前提条件
 
-- A Miro account
-- A hosting solution for static files (e.g., GitHub Pages, Vercel, Netlify, AWS S3)
-- Node.js and npm installed locally for building
+- Miroアカウント
+- 静的ファイル用のホスティングソリューション（例：GitHub Pages、Vercel、Netlify、AWS S3）
+- ビルドのためにローカルにNode.jsとnpmがインストールされていること
 
-## Step 1: Build the Application
+## ステップ1: アプリケーションのビルド
 
-1. Build the application for production:
+1. プロダクション用にアプリケーションをビルド:
    ```bash
    npm run build
    ```
 
-2. The built files will be in the `dist/` directory.
+2. ビルドされたファイルは`dist/`ディレクトリに格納されます。
 
-## Step 2: Host the Application
+## ステップ2: アプリケーションのホスティング
 
-You need to host the built application on a publicly accessible HTTPS URL. Here are some options:
+公開アクセス可能なHTTPS URLでビルドされたアプリケーションをホストする必要があります。以下にいくつかのオプションを示します：
 
-### Option A: GitHub Pages
+### オプションA: GitHub Pages
 
-1. In your repository settings, enable GitHub Pages
-2. Set the source to the `gh-pages` branch or `/docs` folder
-3. Deploy the `dist/` contents to your chosen location
-4. Your app will be available at `https://YOUR_USERNAME.github.io/agile-calender/`
+1. リポジトリ設定でGitHub Pagesを有効化
+2. ソースを`gh-pages`ブランチまたは`/docs`フォルダに設定
+3. `dist/`の内容を選択した場所にデプロイ
+4. アプリは`https://YOUR_USERNAME.github.io/agile-calender/`で利用可能になります
 
-### Option B: Vercel
+### オプションB: Vercel
 
-1. Install Vercel CLI: `npm i -g vercel`
-2. Run: `vercel --prod`
-3. Follow the prompts to deploy
-4. Your app will be available at `https://your-project.vercel.app/`
+1. Vercel CLIをインストール: `npm i -g vercel`
+2. 実行: `vercel --prod`
+3. プロンプトに従ってデプロイ
+4. アプリは`https://your-project.vercel.app/`で利用可能になります
 
-### Option C: Netlify
+### オプションC: Netlify
 
-1. Install Netlify CLI: `npm i -g netlify-cli`
-2. Run: `netlify deploy --prod --dir=dist`
-3. Your app will be available at `https://your-site.netlify.app/`
+1. Netlify CLIをインストール: `npm i -g netlify-cli`
+2. 実行: `netlify deploy --prod --dir=dist`
+3. アプリは`https://your-site.netlify.app/`で利用可能になります
 
-### Option D: Custom Server
+### オプションD: カスタムサーバー
 
-Upload the contents of the `dist/` directory to your web server.
+`dist/`ディレクトリの内容をWebサーバーにアップロードします。
 
-**Important**: The app must be served over HTTPS.
+**重要**: アプリはHTTPS経由で提供される必要があります。
 
-## Step 3: Create a Miro App
+## ステップ3: Miroアプリの作成
 
-1. Go to [Miro Developer Portal](https://developers.miro.com/)
-2. Click "Create new app"
-3. Fill in the app details:
+1. [Miro Developer Portal](https://developers.miro.com/)にアクセス
+2. 「Create new app」をクリック
+3. アプリの詳細を入力:
    - **App Name**: Agile Calendar
-   - **Description**: Standup scheduler for agile teams
-   - **App URL**: Your hosted URL from Step 2
+   - **Description**: アジャイルチーム向けスタンドアップスケジューラ
+   - **App URL**: ステップ2でホストしたURL
 
-## Step 4: Configure App Permissions
+## ステップ4: アプリ権限の設定
 
-In your app settings, configure the following:
+アプリ設定で以下を構成します：
 
-### SDK Scopes
-Grant these permissions:
-- `boards:read` - Read board content
-- `boards:write` - Modify board content
+### SDKスコープ
+以下の権限を付与:
+- `boards:read` - ボードコンテンツの読み取り
+- `boards:write` - ボードコンテンツの変更
 
-### App URLs
+### アプリURL
 - **Web-plugin**: `https://your-hosted-url/index.html`
 
-### Redirect URI
-- Add your hosted URL as an authorized redirect URI
+### リダイレクトURI
+- ホストしたURLを承認されたリダイレクトURIとして追加
 
-## Step 5: Install the App
+## ステップ5: アプリのインストール
 
-1. In the Miro Developer Portal, go to your app
-2. Click "Install app and get OAuth token"
-3. Select a team to install the app to
-4. Authorize the app
+1. Miro Developer Portalで、アプリに移動
+2. 「Install app and get OAuth token」をクリック
+3. アプリをインストールするチームを選択
+4. アプリを承認
 
-## Step 6: Use the App
+## ステップ6: アプリの使用
 
-1. Open a Miro board
-2. Click the three dots (more) menu on the left toolbar
-3. Find "Agile Calendar" in your installed apps
-4. Click it to open the panel
+1. Miroボードを開く
+2. 左側のツールバーの3点メニュー（more）をクリック
+3. インストール済みアプリから「Agile Calendar」を見つける
+4. クリックしてパネルを開く
 
-## Development Mode
+## 開発モード
 
-For local development:
+ローカル開発の場合：
 
-1. Run the dev server:
+1. 開発サーバーを起動:
    ```bash
    npm run dev
    ```
 
-2. The app will be available at `http://localhost:5173`
+2. アプリは`http://localhost:5173`で利用可能になります
 
-3. In your Miro app settings, you can temporarily use `http://localhost:5173` as the Web-plugin URL for testing
+3. Miroアプリ設定で、テスト用に一時的に`http://localhost:5173`をWeb-plugin URLとして使用できます
 
-**Note**: Miro may not allow HTTP URLs in production, so you'll need to use HTTPS tunneling (like ngrok) for local testing:
+**注意**: Miroは本番環境でHTTP URLを許可しない場合があるため、ローカルテストにはHTTPSトンネリング（ngrokなど）を使用する必要があります：
 
 ```bash
-# Install ngrok
+# ngrokをインストール
 npm i -g ngrok
 
-# Start your dev server
+# 開発サーバーを起動
 npm run dev
 
-# In another terminal, start ngrok
+# 別のターミナルでngrokを起動
 ngrok http 5173
 
-# Use the HTTPS URL from ngrok in your Miro app settings
+# ngrokからのHTTPS URLをMiroアプリ設定で使用
 ```
 
-## Updating the App
+## アプリの更新
 
-When you make changes:
+変更を加えた場合：
 
-1. Build the new version: `npm run build`
-2. Deploy the updated `dist/` directory to your hosting
-3. Users will automatically get the latest version on next load
+1. 新しいバージョンをビルド: `npm run build`
+2. 更新された`dist/`ディレクトリをホスティングにデプロイ
+3. ユーザーは次回ロード時に自動的に最新バージョンを取得します
 
-## Troubleshooting
+## トラブルシューティング
 
-### App doesn't appear in Miro
-- Ensure the app is installed to your team
-- Check that the Web-plugin URL is correct
-- Verify HTTPS is working on your hosting
+### アプリがMiroに表示されない
+- アプリがチームにインストールされていることを確認
+- Web-plugin URLが正しいことを確認
+- ホスティングでHTTPSが機能していることを確認
 
-### Permission errors
-- Check that all required SDK scopes are granted
-- Reinstall the app to refresh permissions
+### 権限エラー
+- 必要なすべてのSDKスコープが付与されていることを確認
+- アプリを再インストールして権限を更新
 
-### Loading issues
-- Check browser console for errors
-- Verify the Miro SDK script is loading correctly
-- Ensure your hosted URL is accessible
+### 読み込みの問題
+- ブラウザコンソールでエラーを確認
+- Miro SDKスクリプトが正しく読み込まれていることを確認
+- ホストされたURLがアクセス可能であることを確認
 
-### Data not persisting
-- Verify the app has `boards:write` permission
-- Check that metadata operations are completing successfully
-- Look for errors in the browser console
+### データが保持されない
+- アプリに`boards:write`権限があることを確認
+- メタデータ操作が正常に完了していることを確認
+- ブラウザコンソールでエラーを探す
 
-## Security Considerations
+## セキュリティ上の考慮事項
 
-- Always use HTTPS for hosting
-- Don't commit sensitive data or API keys
-- Review Miro's security best practices
-- Regularly update dependencies for security patches
+- ホスティングには必ずHTTPSを使用
+- 機密データやAPIキーをコミットしない
+- Miroのセキュリティベストプラクティスを確認
+- セキュリティパッチのため定期的に依存関係を更新
 
-## Support
+## サポート
 
-For issues related to:
-- **This app**: Create an issue in this repository
-- **Miro SDK**: Check [Miro Developer Documentation](https://developers.miro.com/docs)
-- **Hosting**: Refer to your hosting provider's documentation
+以下に関する問題について：
+- **このアプリ**: このリポジトリでイシューを作成
+- **Miro SDK**: [Miro Developer Documentation](https://developers.miro.com/docs)を確認
+- **ホスティング**: ホスティングプロバイダーのドキュメントを参照
 
-## Additional Resources
+## 追加リソース
 
-- [Miro Web SDK Documentation](https://developers.miro.com/docs/web-sdk-reference)
-- [Miro Developer Community](https://community.miro.com/developer-platform-and-apis-57)
-- [Miro App Examples](https://github.com/miroapp/app-examples)
+- [Miro Web SDK ドキュメント](https://developers.miro.com/docs/web-sdk-reference)
+- [Miro Developer コミュニティ](https://community.miro.com/developer-platform-and-apis-57)
+- [Miro アプリ例](https://github.com/miroapp/app-examples)

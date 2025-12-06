@@ -1,180 +1,180 @@
-# Agile Calendar - Miro Standup Scheduler
+# Agile Calendar - Miro スタンドアップスケジューラ
 
-A Miro Web SDK application designed to streamline agile team standup meetings by managing tasks, team members, tracks, and schedules directly on a Miro board.
+Miroボード上で、タスク、チームメンバー、トラック、スケジュールを直接管理し、アジャイルチームのスタンドアップミーティングを効率化するMiro Web SDKアプリケーションです。
 
-## Overview
+## 概要
 
-This application helps agile development teams manage their daily standup operations efficiently by:
+このアプリケーションは、アジャイル開発チームの日次スタンドアップ運用を効率的に管理します：
 
-- Managing tasks with PM, Designer, and Dev participation modes
-- Creating and maintaining 3-month rolling calendar views
-- Organizing developers into tracks (pair programming units)
-- Supporting two-phase standup meetings (Phase1: full team, Phase2: devs only)
-- Tracking personal schedules and availability
-- Coordinating with external teams
+- PM、Designer、Dev参加モードを持つタスク管理
+- 3ヶ月のローリングカレンダービューの作成・維持
+- 開発者をトラック（ペアプログラミング単位）に編成
+- 2フェーズのスタンドアップミーティング対応（Phase1: チーム全体、Phase2: 開発者のみ）
+- 個人スケジュールと可用性の追跡
+- 外部チームとの連携
 
-## Features
+## 機能
 
-### Current Implementation
+### 実装済み機能
 
-#### ✅ Tasks Tab
-- Create, edit, and delete tasks
-- Set task status (Draft, Planned, Scheduled, Done, Canceled)
-- Configure dates and time ranges
-- Define Dev participation modes (No Dev, Tracks, All Dev)
-- Add external links to tasks
-- Specify required track counts for tasks
+#### ✅ Tasks タブ
+- タスクの作成、編集、削除
+- タスクステータスの設定（Draft、Planned、Scheduled、Done、Canceled）
+- 日付と時間範囲の設定
+- Dev参加モードの定義（No Dev、Tracks、All Dev）
+- タスクへの外部リンク追加
+- 必要なトラック数の指定
 
-#### ✅ Calendar Tab
-- Generate 3-month calendar views on the Miro board
-- Navigate between months (previous/next)
-- Automatically create calendar frames with PM, Designer, and Track rows
-- Display tasks in appropriate calendar cells
+#### ✅ Calendar タブ
+- Miroボード上に3ヶ月カレンダービューを生成
+- 月間ナビゲーション（前月/次月）
+- PM、Designer、Trackの行を持つカレンダーフレームを自動作成
+- 適切なカレンダーセルにタスクを表示
 
-#### ✅ Tracks & Devs Tab
-- Manage developer roster
-- Create and manage tracks (up to 2 developers per track for pair programming)
-- Activate/deactivate tracks
-- View track capacity and status
+#### ✅ Tracks & Devs タブ
+- 開発者名簿の管理
+- トラックの作成と管理（ペアプログラミング用に1トラック最大2人）
+- トラックの有効化/無効化
+- トラック容量とステータスの表示
 
-#### ✅ Settings Tab
-- Configure base month for calendar display
-- Manage external team definitions
-- View current statistics (devs, tracks, external teams)
+#### ✅ Settings タブ
+- カレンダー表示の基準月を設定
+- 外部チーム定義の管理
+- 現在の統計表示（開発者数、トラック数、外部チーム数）
 
-### Planned Features (Not Yet Implemented)
+### 予定機能（未実装）
 
-- **Phase1 Standup Tab**: Full team planning with PM, Designers, and Dev mode decisions
-- **Phase2 Standup Tab**: Dev-only session for track assignments and conflict resolution
-- **Daily Track Assignments**: Assign specific developers to tracks for each day
-- **Personal Schedules**: Track full-day off and partial time blocks
-- **Conflict Detection**: Identify scheduling conflicts based on availability
-- **Task Placement**: Automatically position tasks on the calendar based on date/time
+- **Phase1 Standup タブ**: PM、Designer、Dev参加モード決定を含むチーム全体での計画
+- **Phase2 Standup タブ**: トラック割り当てと競合解決のための開発者専用セッション
+- **Daily Track Assignments**: 各日に特定の開発者をトラックに割り当て
+- **Personal Schedules**: 終日休暇と部分的な時間ブロックの追跡
+- **Conflict Detection**: 可用性に基づくスケジュール競合の検出
+- **Task Placement**: 日付/時間に基づいてカレンダー上にタスクを自動配置
 
-## Tech Stack
+## 技術スタック
 
-- **TypeScript** - Type-safe development
-- **React** - UI framework
-- **Vite** - Build tool and dev server
-- **Miro Web SDK v2** - Integration with Miro boards
+- **TypeScript** - 型安全な開発
+- **React** - UIフレームワーク
+- **Vite** - ビルドツールと開発サーバー
+- **Miro Web SDK v2** - Miroボードとの統合
 
-## Project Structure
+## プロジェクト構造
 
 ```
 src/
 ├── components/
 │   └── Tabs/
-│       ├── TasksTab.tsx          # Task management UI
-│       ├── CalendarTab.tsx       # Calendar generation and navigation
-│       ├── TracksTab.tsx         # Developer and track management
-│       └── SettingsTab.tsx       # Application settings
+│       ├── TasksTab.tsx          # タスク管理UI
+│       ├── CalendarTab.tsx       # カレンダー生成とナビゲーション
+│       ├── TracksTab.tsx         # 開発者とトラック管理
+│       └── SettingsTab.tsx       # アプリケーション設定
 ├── models/
-│   └── types.ts                  # TypeScript type definitions
+│   └── types.ts                  # TypeScript型定義
 ├── services/
-│   ├── settingsService.ts        # Settings persistence
-│   ├── tasksService.ts           # Task CRUD operations
-│   └── calendarLayoutService.ts  # Calendar rendering logic
-├── App.tsx                       # Main application component
-├── miro.ts                       # Miro SDK initialization
-└── index.tsx                     # Application entry point
+│   ├── settingsService.ts        # 設定の永続化
+│   ├── tasksService.ts           # タスクCRUD操作
+│   └── calendarLayoutService.ts  # カレンダーレンダリングロジック
+├── App.tsx                       # メインアプリケーションコンポーネント
+├── miro.ts                       # Miro SDK初期化
+└── index.tsx                     # アプリケーションエントリーポイント
 ```
 
-## Getting Started
+## はじめに
 
-### Prerequisites
+### 必要要件
 
-- Node.js (v16 or higher)
-- npm or yarn
-- A Miro account and board
+- Node.js (v16以上)
+- npmまたはyarn
+- Miroアカウントとボード
 
-### Installation
+### インストール
 
-1. Clone the repository:
+1. リポジトリをクローン:
    ```bash
    git clone https://github.com/satoshikosugi/agile-calender.git
    cd agile-calender
    ```
 
-2. Install dependencies:
+2. 依存関係をインストール:
    ```bash
    npm install
    ```
 
-3. Run development server:
+3. 開発サーバーを起動:
    ```bash
    npm run dev
    ```
 
-4. Build for production:
+4. プロダクション用ビルド:
    ```bash
    npm run build
    ```
 
-### Miro App Setup
+### Miroアプリのセットアップ
 
-To use this app with Miro, you'll need to:
+このアプリをMiroで使用するには、以下が必要です：
 
-1. Create a new Miro app in the [Miro Developer Portal](https://developers.miro.com/)
-2. Configure the app with Web SDK permissions
-3. Set up the app URL to point to your hosted application
-4. Install the app to your Miro board
+1. [Miro Developer Portal](https://developers.miro.com/)で新しいMiroアプリを作成
+2. Web SDK権限でアプリを設定
+3. ホストされたアプリケーションを指すようにアプリURLを設定
+4. Miroボードにアプリをインストール
 
-Detailed Miro setup instructions will be added in a future update.
+詳細なMiroセットアップ手順は今後のアップデートで追加されます。
 
-## Data Model
+## データモデル
 
-All data is stored directly on the Miro board using metadata:
+すべてのデータは、メタデータを使用してMiroボード上に直接保存されます：
 
-- **Settings**: Stored in an invisible shape's metadata
-- **Tasks**: Each task is a sticky note with metadata
-- **Calendar Frames**: Month views are Miro frames with labeled rows and columns
+- **Settings**: 不可視図形のメタデータに保存
+- **Tasks**: 各タスクはメタデータ付き付箋
+- **Calendar Frames**: 月表示はラベル付き行と列を持つMiroフレーム
 
-See `develop.md` for detailed data model specifications.
+詳細なデータモデル仕様については`develop.md`を参照してください。
 
-## Usage
+## 使い方
 
-1. **Set up your team**: 
-   - Go to the Tracks & Devs tab
-   - Add developers to your team
-   - Create tracks (typically Track1, Track2, etc.)
+1. **チームをセットアップ**: 
+   - Tracks & Devsタブに移動
+   - チームに開発者を追加
+   - トラックを作成（通常Track1、Track2など）
 
-2. **Configure settings**:
-   - Go to the Settings tab
-   - Set your base month
-   - Add external teams if needed
+2. **設定を構成**:
+   - Settingsタブに移動
+   - 基準月を設定
+   - 必要に応じて外部チームを追加
 
-3. **Create tasks**:
-   - Go to the Tasks tab
-   - Click "New Task" to create tasks
-   - Fill in details including dates, times, and Dev mode
+3. **タスクを作成**:
+   - Tasksタブに移動
+   - 「New Task」をクリックしてタスクを作成
+   - 日付、時間、Devモードなどの詳細を入力
 
-4. **Generate calendar**:
-   - Go to the Calendar tab
-   - Click "Generate/Update Calendar" to create the calendar frames on your Miro board
-   - Use navigation buttons to move between months
+4. **カレンダーを生成**:
+   - Calendarタブに移動
+   - 「Generate/Update Calendar」をクリックしてMiroボード上にカレンダーフレームを作成
+   - ナビゲーションボタンを使用して月間を移動
 
-## Development Roadmap
+## 開発ロードマップ
 
-See the full specification in `develop.md` for complete details. Key remaining features:
+完全な詳細については`develop.md`の完全な仕様を参照してください。主な残りの機能：
 
-- [ ] Phase1 Standup Tab implementation
-- [ ] Phase2 Standup Tab implementation  
-- [ ] Daily track assignment UI
-- [ ] Personal schedule management
-- [ ] Conflict detection and resolution
-- [ ] Enhanced task placement on calendar
-- [ ] Rotation algorithms for track assignments
-- [ ] Integration with external task management tools (future)
+- [ ] Phase1 Standupタブの実装
+- [ ] Phase2 Standupタブの実装
+- [ ] 日次トラック割り当てUI
+- [ ] 個人スケジュール管理
+- [ ] 競合検出と解決
+- [ ] カレンダー上のタスク配置の強化
+- [ ] トラック割り当てのローテーションアルゴリズム
+- [ ] 外部タスク管理ツールとの統合（将来）
 
-## Contributing
+## コントリビューション
 
-Contributions are welcome! Please see our contributing guidelines for more information.
+コントリビューションを歓迎します！詳細については、コントリビューションガイドラインを参照してください。
 
-## License
+## ライセンス
 
 ISC
 
-## See Also
+## 関連情報
 
-- [develop.md](develop.md) - Complete technical specification
-- [Miro Web SDK Documentation](https://developers.miro.com/docs/web-sdk-reference)
+- [develop.md](develop.md) - 完全な技術仕様
+- [Miro Web SDK ドキュメント](https://developers.miro.com/docs/web-sdk-reference)

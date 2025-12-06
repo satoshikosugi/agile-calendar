@@ -1,388 +1,388 @@
-# Remaining Tasks for Agile Calendar Development
+# Agile Calendar開発の残タスク
 
-This document outlines the remaining tasks that need to be implemented according to the specifications in develop.md. These should be created as GitHub issues.
+このドキュメントは、develop.mdの仕様に従って実装する必要がある残りのタスクの概要を示しています。これらはGitHub issueとして作成する必要があります。
 
-## Issue 1: Implement Phase1 Standup Tab (Full Team Planning)
+## Issue 1: Phase1 Standupタブの実装（チーム全体計画）
 
-**Priority**: High
-**Estimated Effort**: Large
+**優先度**: 高
+**推定工数**: 大
 
-### Description
-Implement the Phase1 Standup Tab for full team planning sessions involving PM, Designers, and the entire development team.
+### 説明
+PM、Designer、開発チーム全体が参加するチーム全体の計画セッション用のPhase1 Standupタブを実装します。
 
-### Requirements
-- Display tasks filtered by time period (today, this week, etc.)
-- Show task list in table format with columns: Title, Date/Time, Roles (PM/Designer/Dev), External Teams, Constraints
-- Implement inline editing for key fields:
-  - Dev mode selection (NoDev, Tracks, AllDev)
-  - Required track count (when mode is Tracks)
-  - Date and time range editing
-- Add calendar synchronization to show available time slots
-- Implement capacity checking:
-  - Calculate total track capacity vs required tracks
-  - Display warnings for over-capacity time slots
-- Respect time-locked tasks (disable editing for locked tasks)
-- Update task devPlan.phase to "Phase1Planned" when complete
+### 要件
+- 期間でフィルタリングされたタスクを表示（今日、今週など）
+- タスクリストを以下の列を持つテーブル形式で表示：タイトル、日付/時間、ロール（PM/Designer/Dev）、外部チーム、制約
+- 主要なフィールドのインライン編集を実装:
+  - Devモード選択（NoDev、Tracks、AllDev）
+  - 必要なトラック数（モードがTracksの場合）
+  - 日付と時間範囲の編集
+- 利用可能な時間枠を表示するカレンダー同期を追加
+- 容量チェックを実装:
+  - 合計トラック容量と必要なトラックを計算
+  - 容量超過時に警告を表示
+- 時間ロックされたタスクを尊重（ロックされたタスクの編集を無効化）
+- 完了時にtask devPlan.phaseを"Phase1Planned"に更新
 
-### Acceptance Criteria
-- [ ] Can view and filter tasks by date range
-- [ ] Can edit Dev mode and track requirements inline
-- [ ] Can adjust task times with visual feedback
-- [ ] Capacity warnings display when conflicts detected
-- [ ] Time-locked tasks cannot be modified
-- [ ] Changes persist to Miro board
-
----
-
-## Issue 2: Implement Phase2 Standup Tab (Dev Track Assignment)
-
-**Priority**: High
-**Estimated Effort**: Large
-
-### Description
-Implement the Phase2 Standup Tab for dev-only sessions where specific tracks are assigned to tasks and conflicts are resolved.
-
-### Requirements
-- Display only tasks with devPlan.phase == "Phase1Planned"
-- Show tasks ordered by time
-- For tasks with mode "Tracks":
-  - Display available tracks for assignment
-  - Check personal schedules to determine track availability
-  - Show visual indicators (✅ available, ⚠️ partial availability, ❌ unavailable)
-  - Allow selection of specific tracks
-- For tasks with mode "AllDev":
-  - Check all dev personal schedules for conflicts
-  - Display warnings if any conflicts exist
-- Allow time adjustments for non-locked tasks
-- Update task devPlan.phase to "Phase2Fixed" when tracks assigned
-- Store assigned track IDs in task.roles.devPlan.assignedTrackIds
-
-### Acceptance Criteria
-- [ ] Shows only Phase1Planned tasks
-- [ ] Can assign specific tracks to tasks
-- [ ] Personal schedule conflicts are detected and displayed
-- [ ] Visual indicators show track availability status
-- [ ] Can adjust task times to resolve conflicts
-- [ ] Updates persist with Phase2Fixed status
-- [ ] Assigned tracks are saved correctly
+### 受け入れ基準
+- [ ] 日付範囲でタスクを表示・フィルタリング可能
+- [ ] Devモードとトラック要件をインラインで編集可能
+- [ ] 視覚的フィードバック付きでタスクの時間を調整可能
+- [ ] 競合検出時に容量警告を表示
+- [ ] 時間ロックされたタスクは変更不可
+- [ ] 変更がMiroボードに永続化される
 
 ---
 
-## Issue 3: Implement Daily Track Assignment Management
+## Issue 2: Phase2 Standupタブの実装（Devトラック割り当て）
 
-**Priority**: High
-**Estimated Effort**: Medium
+**優先度**: 高
+**推定工数**: 大
 
-### Description
-Add functionality to manage daily track assignments (which devs are in which tracks on specific dates).
+### 説明
+特定のトラックがタスクに割り当てられ、競合が解決される開発者専用セッション用のPhase2 Standupタブを実装します。
 
-### Requirements
-- Add UI within Tracks & Devs tab for daily assignments
-- Date selector (default to today)
-- Grid showing all active tracks
-- Drag-and-drop or selection interface to assign devs to tracks
-- Validation:
-  - Each track has at most capacity devs (typically 2)
-  - Each dev assigned to only one track per day
-- Quick actions:
-  - "Auto Assign" button - automatically distribute devs across tracks
-  - "Copy from Yesterday" button
-  - "Apply Rotation" button (simple rotation algorithm)
-- Store in settings.dailyTrackAssignments[date]
+### 要件
+- devPlan.phase == "Phase1Planned"のタスクのみを表示
+- 時間順にタスクを表示
+- モードが"Tracks"のタスクの場合:
+  - 割り当て可能なトラックを表示
+  - 個人スケジュールをチェックしてトラックの可用性を判定
+  - 視覚的インジケーターを表示（✅ 利用可能、⚠️ 部分的に利用可能、❌ 利用不可）
+  - 特定のトラックの選択を許可
+- モードが"AllDev"のタスクの場合:
+  - すべての開発者の個人スケジュールで競合をチェック
+  - 競合が存在する場合は警告を表示
+- ロックされていないタスクの時間調整を許可
+- トラック割り当て時にtask devPlan.phaseを"Phase2Fixed"に更新
+- 割り当てられたトラックIDをtask.roles.devPlan.assignedTrackIdsに保存
 
-### Acceptance Criteria
-- [ ] Can select any date for editing
-- [ ] Can assign devs to tracks visually
-- [ ] Validation prevents invalid assignments
-- [ ] Auto-assign distributes devs evenly
-- [ ] Can copy previous day's assignments
-- [ ] Changes persist to Miro board
-- [ ] Integrates with Phase2 availability checking
-
----
-
-## Issue 4: Implement Personal Schedule Management
-
-**Priority**: Medium
-**Estimated Effort**: Medium
-
-### Description
-Add UI for managing personal schedules (full-day off, partial time blocks).
-
-### Requirements
-- Add "Personal Schedules" section in Tracks & Devs tab
-- For each dev, allow adding schedule entries:
-  - Date picker
-  - Type selection (fullDayOff or partial)
-  - For partial: start time and end time inputs
-  - Reason/description field
-- List view of all scheduled absences/blocks
-- Edit and delete functionality
-- Store in settings.personalSchedules[devId]
-
-### Acceptance Criteria
-- [ ] Can add full-day off for any dev
-- [ ] Can add partial time blocks with start/end times
-- [ ] Can view all personal schedules
-- [ ] Can edit and delete schedule entries
-- [ ] Changes persist to Miro board
-- [ ] Integrates with Phase2 conflict detection
+### 受け入れ基準
+- [ ] Phase1Plannedタスクのみを表示
+- [ ] タスクに特定のトラックを割り当て可能
+- [ ] 個人スケジュールの競合が検出され表示される
+- [ ] 視覚的インジケーターがトラックの可用性状態を示す
+- [ ] 競合を解決するためにタスクの時間を調整可能
+- [ ] Phase2Fixedステータスで更新が永続化される
+- [ ] 割り当てられたトラックが正しく保存される
 
 ---
 
-## Issue 5: Enhanced Calendar Task Placement
+## Issue 3: 日次トラック割り当て管理の実装
 
-**Priority**: Medium
-**Estimated Effort**: Medium
+**優先度**: 高
+**推定工数**: 中
 
-### Description
-Improve the calendar rendering to automatically place tasks in the correct cells based on their date, time, and assigned tracks.
+### 説明
+日次トラック割り当て（特定の日付にどの開発者がどのトラックにいるか）を管理する機能を追加します。
 
-### Requirements
-- When tasks are created/updated with date and time:
-  - Calculate the appropriate position on the calendar
-  - Place task sticky note in correct date column
-  - Place in correct row (PM, Designer, or Track row)
-- Update positions when tasks are reassigned
-- Handle tasks spanning multiple days/times
-- Visual indicators for:
-  - Task status (color coding)
-  - External team participation
-  - Time-locked tasks (lock icon)
+### 要件
+- Tracks & Devsタブ内に日次割り当て用のUIを追加
+- 日付セレクター（デフォルトは今日）
+- すべてのアクティブなトラックを表示するグリッド
+- 開発者をトラックに割り当てるためのドラッグ&ドロップまたは選択インターフェース
+- バリデーション:
+  - 各トラックは最大容量の開発者数（通常2人）
+  - 各開発者は1日に1つのトラックのみに割り当て
+- クイックアクション:
+  - "Auto Assign"ボタン - 開発者をトラック全体に自動分配
+  - "Copy from Yesterday"ボタン
+  - "Apply Rotation"ボタン（シンプルなローテーションアルゴリズム）
+- settings.dailyTrackAssignments[date]に保存
 
-### Acceptance Criteria
-- [ ] Tasks appear in correct calendar cells
-- [ ] Position updates when task date/time changes
-- [ ] Tasks appear in assigned track rows
-- [ ] Visual styling reflects task properties
-- [ ] Works across all calendar months
-
----
-
-## Issue 6: Implement Conflict Detection and Resolution
-
-**Priority**: Medium
-**Estimated Effort**: Medium
-
-### Description
-Add comprehensive conflict detection for scheduling conflicts between tasks, personal schedules, and resource availability.
-
-### Requirements
-- Detect conflicts in real-time:
-  - Multiple tasks requiring the same track at same time
-  - Tasks scheduled when track members have personal blocks
-  - Over-capacity situations (more required tracks than available)
-- Visual conflict indicators:
-  - Warning icons on tasks
-  - Color highlighting on calendar
-  - Detailed conflict descriptions in tooltips
-- Suggest resolution options:
-  - Alternative time slots
-  - Alternative track assignments
-- Allow marking conflicts as "accepted" if unavoidable
-
-### Acceptance Criteria
-- [ ] All conflict types are detected
-- [ ] Conflicts display clearly in UI
-- [ ] Can see detailed conflict information
-- [ ] Suggestions provided when available
-- [ ] Can accept/acknowledge conflicts
-- [ ] Detection runs in real-time during editing
+### 受け入れ基準
+- [ ] 編集用に任意の日付を選択可能
+- [ ] 視覚的に開発者をトラックに割り当て可能
+- [ ] バリデーションが無効な割り当てを防止
+- [ ] 自動割り当てが開発者を均等に分配
+- [ ] 前日の割り当てをコピー可能
+- [ ] 変更がMiroボードに永続化される
+- [ ] Phase2の可用性チェックと統合
 
 ---
 
-## Issue 7: Add External Participant Management to Tasks
+## Issue 4: 個人スケジュール管理の実装
 
-**Priority**: Low
-**Estimated Effort**: Small
+**優先度**: 中
+**推定工数**: 中
 
-### Description
-Enhance the Tasks tab to fully support external participant configuration.
+### 説明
+個人スケジュール（終日休暇、部分的な時間ブロック）を管理するUIを追加します。
 
-### Requirements
-- In task edit form, add section for external participants
-- Allow selecting from settings.externalTeams
-- For each selected team:
-  - Checkbox for "required" participation
-  - Checkbox for "time fixed" (team sets the time)
-- Display external team info in task detail view
-- Show external team participation in Phase1 planning
+### 要件
+- Tracks & Devsタブに"個人スケジュール"セクションを追加
+- 各開発者に対してスケジュールエントリーの追加を許可:
+  - 日付ピッカー
+  - タイプ選択（fullDayOffまたはpartial）
+  - partialの場合: 開始時間と終了時間の入力
+  - 理由/説明フィールド
+- すべての予定された欠勤/ブロックのリストビュー
+- 編集と削除機能
+- settings.personalSchedules[devId]に保存
 
-### Acceptance Criteria
-- [ ] Can add/remove external teams from tasks
-- [ ] Can mark teams as required
-- [ ] Can mark time as fixed by external team
-- [ ] External participation displays in views
-- [ ] Time-fixed flag prevents time changes
-
----
-
-## Issue 8: Add PM and Designer Assignment to Tasks
-
-**Priority**: Low
-**Estimated Effort**: Small
-
-### Description
-Add UI for assigning PM and Designer roles to tasks.
-
-### Requirements
-- Add PM master data to settings (similar to devs)
-- Add Designer master data to settings
-- In task edit form:
-  - Dropdown to select PM (from settings.pms)
-  - Multi-select for Designers (from settings.designers)
-- Store in task.roles.pmId and task.roles.designerIds
-- Display in task views and Phase1 planning
-
-### Acceptance Criteria
-- [ ] Can add/edit PM and Designer lists in settings
-- [ ] Can assign PM to tasks
-- [ ] Can assign multiple Designers to tasks
-- [ ] Assignments display in all relevant views
-- [ ] Changes persist to Miro board
+### 受け入れ基準
+- [ ] 任意の開発者の終日休暇を追加可能
+- [ ] 開始/終了時間付きの部分的な時間ブロックを追加可能
+- [ ] すべての個人スケジュールを表示可能
+- [ ] スケジュールエントリーを編集、削除可能
+- [ ] 変更がMiroボードに永続化される
+- [ ] Phase2の競合検出と統合
 
 ---
 
-## Issue 9: Implement Data Export/Import
+## Issue 5: カレンダーへのタスク配置機能の強化
 
-**Priority**: Low
-**Estimated Effort**: Small
+**優先度**: 中
+**推定工数**: 中
 
-### Description
-Add functionality to export and import settings and tasks as JSON files.
+### 説明
+日付、時間、割り当てられたトラックに基づいて、タスクを正しいセルに自動的に配置するカレンダーレンダリングを改善します。
 
-### Requirements
-- Add "Export" button in Settings tab
-  - Exports all settings and tasks as JSON
-  - Downloads file to user's computer
-- Add "Import" button in Settings tab
-  - Allows uploading JSON file
-  - Validates structure
-  - Confirms before overwriting existing data
-  - Imports and saves to Miro board
+### 要件
+- タスクが日付と時間付きで作成/更新された際:
+  - カレンダー上の適切な位置を計算
+  - 正しい日付列にタスク付箋を配置
+  - 正しい行（PM、デザイナー、またはトラック行）に配置
+- タスクが再割り当てされた際に位置を更新
+- 複数日/時間にまたがるタスクの処理
+- 以下の視覚的インジケーター:
+  - タスクステータス（色分け）
+  - 外部チームの参加
+  - 時間固定タスク（ロックアイコン）
 
-### Acceptance Criteria
-- [ ] Can export complete data as JSON
-- [ ] Can import JSON to restore data
-- [ ] Import validates data structure
-- [ ] Confirmation required before import
-- [ ] Works across different boards
-
----
-
-## Issue 10: Add Automated Tests
-
-**Priority**: Low
-**Estimated Effort**: Large
-
-### Description
-Add comprehensive test coverage for the application.
-
-### Requirements
-- Set up testing framework (Vitest recommended)
-- Unit tests for:
-  - Data models and type validation
-  - Service functions (settings, tasks, calendar)
-  - Utility functions
-- Component tests for:
-  - Each tab component
-  - Form validation
-  - User interactions
-- Integration tests for:
-  - Settings persistence
-  - Task CRUD operations
-  - Calendar generation
-
-### Acceptance Criteria
-- [ ] Testing framework configured
-- [ ] Core services have unit tests
-- [ ] Components have basic test coverage
-- [ ] Tests run in CI/CD pipeline
-- [ ] Coverage report available
+### 受け入れ基準
+- [ ] タスクが正しいカレンダーセルに表示される
+- [ ] タスクの日付/時間が変更されると位置が更新される
+- [ ] タスクが割り当てられたトラック行に表示される
+- [ ] 視覚的スタイルがタスクのプロパティを反映
+- [ ] すべてのカレンダー月で動作する
 
 ---
 
-## Issue 11: Improve Error Handling and User Feedback
+## Issue 6: コンフリクト検出と解決の実装
 
-**Priority**: Medium
-**Estimated Effort**: Small
+**優先度**: 中
+**推定工数**: 中
 
-### Description
-Enhance error handling throughout the application and provide better user feedback.
+### 説明
+タスク、個人スケジュール、リソースの可用性間のスケジューリングコンフリクトに対する包括的な検出機能を追加します。
 
-### Requirements
-- Replace `alert()` calls with toast notifications or modal dialogs
-- Add loading states for all async operations
-- Improve error messages to be more user-friendly
-- Add retry mechanisms for failed operations
-- Log errors for debugging while showing friendly messages to users
-- Add confirmation dialogs for destructive actions
+### 要件
+- リアルタイムでのコンフリクト検出:
+  - 同じ時間に同じトラックを必要とする複数のタスク
+  - トラックメンバーが個人ブロックを持つ時間にスケジュールされたタスク
+  - 過剰なキャパシティ状況（必要なトラック数が利用可能数を超える）
+- 視覚的なコンフリクトインジケーター:
+  - タスクに警告アイコン
+  - カレンダー上の色分けハイライト
+  - ツールチップでの詳細なコンフリクト説明
+- 解決オプションの提案:
+  - 代替の時間枠
+  - 代替のトラック割り当て
+- 避けられない場合、コンフリクトを「承認済み」としてマーク可能
 
-### Acceptance Criteria
-- [ ] No raw alert() calls remain
-- [ ] Loading indicators on all async operations
-- [ ] Clear error messages for users
-- [ ] Errors logged to console for debugging
-- [ ] Confirmations for deletes and overwrites
-
----
-
-## Issue 12: Miro App Configuration Documentation
-
-**Priority**: High
-**Estimated Effort**: Small
-
-### Description
-Create comprehensive documentation for setting up the app in Miro.
-
-### Requirements
-- Step-by-step guide for:
-  - Creating Miro app in developer portal
-  - Configuring app permissions
-  - Setting up app URLs
-  - Installing app to boards
-  - Troubleshooting common issues
-- Add screenshots and examples
-- Include app manifest/configuration details
-- Document required Miro SDK permissions
-
-### Acceptance Criteria
-- [ ] Complete setup guide written
-- [ ] Screenshots added for key steps
-- [ ] App permissions documented
-- [ ] Common issues and solutions listed
-- [ ] Example configuration provided
+### 受け入れ基準
+- [ ] すべてのコンフリクトタイプが検出される
+- [ ] コンフリクトがUI上に明確に表示される
+- [ ] 詳細なコンフリクト情報を確認できる
+- [ ] 可能な場合に提案が提供される
+- [ ] コンフリクトを承認/認知できる
+- [ ] 編集中にリアルタイムで検出が実行される
 
 ---
 
-## Implementation Priority Order
+## Issue 7: タスクへの外部参加者管理の追加
 
-Based on the develop.md specification priorities:
+**優先度**: 低
+**推定工数**: 小
 
-1. **High Priority (MVP)**
-   - Issue 1: Phase1 Standup Tab
-   - Issue 2: Phase2 Standup Tab  
-   - Issue 3: Daily Track Assignments
-   - Issue 12: Miro Setup Documentation
+### 説明
+外部参加者の設定を完全にサポートするようにタスクタブを強化します。
 
-2. **Medium Priority (Core Enhancements)**
-   - Issue 4: Personal Schedule Management
-   - Issue 5: Enhanced Calendar Placement
-   - Issue 6: Conflict Detection
-   - Issue 11: Error Handling Improvements
+### 要件
+- タスク編集フォームに外部参加者セクションを追加
+- settings.externalTeamsから選択可能にする
+- 選択された各チームに対して:
+  - 「必須」参加のチェックボックス
+  - 「時間固定」のチェックボックス（チームが時間を設定）
+- タスク詳細ビューに外部チーム情報を表示
+- Phase1プランニングで外部チームの参加を表示
 
-3. **Low Priority (Polish & Extras)**
-   - Issue 7: External Participant Management
-   - Issue 8: PM/Designer Assignment
-   - Issue 9: Data Export/Import
-   - Issue 10: Automated Tests
+### 受け入れ基準
+- [ ] タスクから外部チームを追加/削除できる
+- [ ] チームを必須としてマークできる
+- [ ] 時間を外部チームによって固定としてマークできる
+- [ ] 外部参加がビューに表示される
+- [ ] 時間固定フラグが時間の変更を防止する
 
-## Notes for Creating GitHub Issues
+---
 
-When creating these issues:
-- Use appropriate labels (enhancement, documentation, testing, etc.)
-- Assign priority labels (high, medium, low)
-- Reference develop.md for detailed specifications
-- Link related issues together
-- Add "good first issue" label for simpler tasks (Issues 7, 8, 9, 12)
-- Consider breaking down large issues (1, 2, 10) into smaller sub-tasks
+## Issue 8: タスクへのPMとデザイナーの割り当ての追加
+
+**優先度**: 低
+**推定工数**: 小
+
+### 説明
+タスクにPMとデザイナーの役割を割り当てるUIを追加します。
+
+### 要件
+- 設定にPMのマスターデータを追加（開発者と同様）
+- 設定にデザイナーのマスターデータを追加
+- タスク編集フォームに:
+  - PMを選択するドロップダウン（settings.pmsから）
+  - デザイナーを選択する複数選択（settings.designersから）
+- task.roles.pmIdとtask.roles.designerIdsに保存
+- タスクビューとPhase1プランニングに表示
+
+### 受け入れ基準
+- [ ] 設定でPMとデザイナーのリストを追加/編集できる
+- [ ] タスクにPMを割り当てられる
+- [ ] タスクに複数のデザイナーを割り当てられる
+- [ ] 割り当てがすべての関連ビューに表示される
+- [ ] 変更がMiroボードに永続化される
+
+---
+
+## Issue 9: データのエクスポート/インポートの実装
+
+**優先度**: 低
+**推定工数**: 小
+
+### 説明
+設定とタスクをJSONファイルとしてエクスポートおよびインポートする機能を追加します。
+
+### 要件
+- 設定タブに「エクスポート」ボタンを追加
+  - すべての設定とタスクをJSONとしてエクスポート
+  - ファイルをユーザーのコンピューターにダウンロード
+- 設定タブに「インポート」ボタンを追加
+  - JSONファイルのアップロードを許可
+  - 構造を検証
+  - 既存データを上書きする前に確認
+  - MiroボードにインポートしてE存
+
+### 受け入れ基準
+- [ ] 完全なデータをJSONとしてエクスポートできる
+- [ ] JSONをインポートしてデータを復元できる
+- [ ] インポートがデータ構造を検証する
+- [ ] インポート前に確認が必要
+- [ ] 異なるボード間で動作する
+
+---
+
+## Issue 10: 自動テストの追加
+
+**優先度**: 低
+**推定工数**: 大
+
+### 説明
+アプリケーションの包括的なテストカバレッジを追加します。
+
+### 要件
+- テストフレームワークのセットアップ（Vitest推奨）
+- ユニットテスト:
+  - データモデルと型検証
+  - サービス関数（設定、タスク、カレンダー）
+  - ユーティリティ関数
+- コンポーネントテスト:
+  - 各タブコンポーネント
+  - フォーム検証
+  - ユーザーインタラクション
+- 統合テスト:
+  - 設定の永続化
+  - タスクのCRUD操作
+  - カレンダー生成
+
+### 受け入れ基準
+- [ ] テストフレームワークが設定されている
+- [ ] コアサービスがユニットテストを持つ
+- [ ] コンポーネントが基本的なテストカバレッジを持つ
+- [ ] テストがCI/CDパイプラインで実行される
+- [ ] カバレッジレポートが利用可能
+
+---
+
+## Issue 11: エラーハンドリングとユーザーフィードバックの改善
+
+**優先度**: 中
+**推定工数**: 小
+
+### 説明
+アプリケーション全体のエラーハンドリングを強化し、より良いユーザーフィードバックを提供します。
+
+### 要件
+- `alert()`呼び出しをトースト通知またはモーダルダイアログに置き換え
+- すべての非同期操作にローディング状態を追加
+- エラーメッセージをよりユーザーフレンドリーに改善
+- 失敗した操作に対する再試行メカニズムを追加
+- ユーザーにフレンドリーなメッセージを表示しながら、デバッグ用にエラーをログに記録
+- 破壊的アクションに対する確認ダイアログを追加
+
+### 受け入れ基準
+- [ ] 生のalert()呼び出しが残っていない
+- [ ] すべての非同期操作にローディングインジケーター
+- [ ] ユーザー向けの明確なエラーメッセージ
+- [ ] デバッグ用にコンソールにエラーをログ記録
+- [ ] 削除と上書きに対する確認
+
+---
+
+## Issue 12: Miroアプリ設定ドキュメント
+
+**優先度**: 高
+**推定工数**: 小
+
+### 説明
+Miroでアプリをセットアップするための包括的なドキュメントを作成します。
+
+### 要件
+- 以下のステップバイステップガイド:
+  - 開発者ポータルでMiroアプリを作成
+  - アプリの権限を設定
+  - アプリのURLをセットアップ
+  - ボードにアプリをインストール
+  - 一般的な問題のトラブルシューティング
+- スクリーンショットと例を追加
+- アプリマニフェスト/設定の詳細を含める
+- 必要なMiro SDKの権限をドキュメント化
+
+### 受け入れ基準
+- [ ] 完全なセットアップガイドが作成されている
+- [ ] 主要なステップにスクリーンショットが追加されている
+- [ ] アプリの権限がドキュメント化されている
+- [ ] 一般的な問題と解決策がリストされている
+- [ ] 設定例が提供されている
+
+---
+
+## 実装優先順位
+
+develop.md仕様の優先度に基づく：
+
+1. **高優先度（MVP）**
+   - Issue 1: Phase1 Standupタブ
+   - Issue 2: Phase2 Standupタブ
+   - Issue 3: 日次トラック割り当て
+   - Issue 12: Miroセットアップドキュメント
+
+2. **中優先度（コア機能強化）**
+   - Issue 4: 個人スケジュール管理
+   - Issue 5: カレンダータスク配置の強化
+   - Issue 6: 競合検出
+   - Issue 11: エラーハンドリングの改善
+
+3. **低優先度（仕上げと追加機能）**
+   - Issue 7: 外部参加者管理
+   - Issue 8: PM/Designer割り当て
+   - Issue 9: データエクスポート/インポート
+   - Issue 10: 自動テスト
+
+## GitHub Issue作成時の注意事項
+
+これらのissueを作成する際：
+- 適切なラベルを使用（enhancement、documentation、testingなど）
+- 優先度ラベルを割り当て（high、medium、low）
+- 詳細な仕様についてはdevelop.mdを参照
+- 関連するissueをリンク
+- よりシンプルなタスク（Issues 7、8、9、12）には"good first issue"ラベルを追加
+- 大きなissue（1、2、10）は小さなサブタスクに分割することを検討

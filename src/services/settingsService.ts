@@ -51,7 +51,11 @@ async function getSettingsShape() {
 export async function loadSettings(): Promise<Settings> {
   try {
     const shape = await getSettingsShape();
-    const metadata = await shape.getMetadata(SETTINGS_KEY);
+    
+    // Handle mock environment where getMetadata might not exist
+    const metadata = shape.getMetadata 
+      ? await shape.getMetadata(SETTINGS_KEY)
+      : shape.metadata?.[SETTINGS_KEY];
     
     if (metadata) {
       return metadata as Settings;

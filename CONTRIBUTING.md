@@ -1,85 +1,85 @@
-# Contributing to Agile Calendar
+# Agile Calendarへのコントリビューション
 
-Thank you for your interest in contributing to the Agile Calendar project! This document provides guidelines and instructions for contributing.
+Agile Calendarプロジェクトへの関心をお寄せいただき、ありがとうございます！このドキュメントでは、コントリビューションのためのガイドラインと手順を提供します。
 
-## Getting Started
+## はじめに
 
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/agile-calender.git`
-3. Create a feature branch: `git checkout -b feature/your-feature-name`
-4. Make your changes
-5. Test your changes
-6. Commit your changes: `git commit -m "Add feature: description"`
-7. Push to your fork: `git push origin feature/your-feature-name`
-8. Create a Pull Request
+1. リポジトリをフォーク
+2. フォークをクローン: `git clone https://github.com/YOUR_USERNAME/agile-calender.git`
+3. フィーチャーブランチを作成: `git checkout -b feature/your-feature-name`
+4. 変更を加える
+5. 変更をテスト
+6. 変更をコミット: `git commit -m "Add feature: description"`
+7. フォークにプッシュ: `git push origin feature/your-feature-name`
+8. プルリクエストを作成
 
-## Development Setup
+## 開発環境のセットアップ
 
 ```bash
-# Install dependencies
+# 依存関係をインストール
 npm install
 
-# Run development server
+# 開発サーバーを起動
 npm run dev
 
-# Build for production
+# プロダクション用にビルド
 npm run build
 
-# Preview production build
+# プロダクションビルドをプレビュー
 npm run preview
 ```
 
-## Code Style
+## コードスタイル
 
-- Use TypeScript for all new code
-- Follow existing code formatting patterns
-- Use meaningful variable and function names
-- Add comments for complex logic
-- Keep functions small and focused
+- すべての新しいコードにはTypeScriptを使用
+- 既存のコードフォーマットパターンに従う
+- 意味のある変数名と関数名を使用
+- 複雑なロジックにはコメントを追加
+- 関数は小さく、焦点を絞った状態に保つ
 
-## Pull Request Guidelines
+## プルリクエストガイドライン
 
-- Provide a clear description of what the PR does
-- Reference any related issues
-- Include screenshots for UI changes
-- Ensure the build passes (`npm run build`)
-- Update documentation if needed
+- PRが何をするかの明確な説明を提供
+- 関連するイシューを参照
+- UI変更のスクリーンショットを含める
+- ビルドが通ることを確認（`npm run build`）
+- 必要に応じてドキュメントを更新
 
-## Areas for Contribution
+## コントリビューション可能な領域
 
-### High Priority
-- Implement Phase1 Standup Tab
-- Implement Phase2 Standup Tab
-- Add daily track assignment functionality
-- Implement personal schedule management
+### 高優先度
+- Phase1 Standupタブの実装
+- Phase2 Standupタブの実装
+- 日次トラック割り当て機能の追加
+- 個人スケジュール管理の実装
 
-### Medium Priority
-- Improve calendar rendering performance
-- Add data export/import functionality
-- Enhance UI/UX based on user feedback
-- Add comprehensive error handling
+### 中優先度
+- カレンダーレンダリングパフォーマンスの改善
+- データエクスポート/インポート機能の追加
+- ユーザーフィードバックに基づくUI/UXの向上
+- 包括的なエラーハンドリングの追加
 
-### Low Priority
-- Add automated tests
-- Improve mobile responsiveness
-- Add keyboard shortcuts
-- Implement undo/redo functionality
+### 低優先度
+- 自動テストの追加
+- モバイルレスポンシブの改善
+- キーボードショートカットの追加
+- アンドゥ/リドゥ機能の実装
 
-## Reporting Issues
+## イシューの報告
 
-When reporting issues, please include:
+イシューを報告する際は、以下を含めてください：
 
-- Clear description of the problem
-- Steps to reproduce
-- Expected behavior
-- Actual behavior
-- Screenshots if applicable
-- Browser and Miro version information
+- 問題の明確な説明
+- 再現手順
+- 期待される動作
+- 実際の動作
+- 該当する場合はスクリーンショット
+- ブラウザとMiroバージョン情報
 
-## Questions?
+## 質問がありますか？
 
-Feel free to open an issue for questions or discussions about the project.
+プロジェクトに関する質問や議論については、お気軽にイシューを開いてください。
 
-## License
+## ライセンス
 
-By contributing, you agree that your contributions will be licensed under the ISC License.
+コントリビューションすることで、あなたのコントリビューションがISCライセンスの下でライセンスされることに同意したものとします。

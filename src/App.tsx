@@ -9,6 +9,17 @@ import './App.css';
 
 type TabType = 'tasks' | 'calendar' | 'tracks' | 'settings';
 
+// Check if running in actual Miro environment (inside iframe)
+const isMiroEnvironment = (() => {
+  try {
+    return typeof window !== 'undefined' && 
+           (window as any).miro && 
+           window.parent !== window;
+  } catch {
+    return false;
+  }
+})();
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('tasks');
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -34,6 +45,17 @@ const App: React.FC = () => {
 
   return (
     <div className="app">
+      {!isMiroEnvironment && (
+        <div style={{
+          background: '#fff3cd',
+          padding: '10px',
+          borderBottom: '1px solid #ffc107',
+          textAlign: 'center',
+          fontSize: '14px',
+        }}>
+          ⚠️ 開発モード: このアプリはMiroボード内で動作するように設計されています
+        </div>
+      )}
       <div className="tabs">
         <button
           className={activeTab === 'tasks' ? 'tab active' : 'tab'}
