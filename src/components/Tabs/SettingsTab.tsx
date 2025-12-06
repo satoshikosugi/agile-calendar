@@ -42,7 +42,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate })
   };
 
   const handleRemoveTeam = (teamId: string) => {
-    if (confirm('Are you sure you want to remove this external team?')) {
+    if (confirm('この外部チームを削除してもよろしいですか？')) {
       const updatedSettings = {
         ...settings,
         externalTeams: settings.externalTeams.filter(team => team.id !== teamId),
@@ -62,22 +62,22 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate })
   return (
     <div className="settings-tab">
       <div className="section">
-        <h2>Calendar Settings</h2>
+        <h2>カレンダー設定</h2>
         
         <div className="form-group">
-          <label>Base Month</label>
+          <label>基準月</label>
           <input
             type="month"
             value={settings.baseMonth}
             onChange={(e) => handleUpdateBaseMonth(e.target.value)}
           />
           <p className="help-text">
-            The base month determines which 3-month period is displayed in the calendar.
+            基準月により、カレンダーに表示される3ヶ月間が決まります。
           </p>
         </div>
 
         <div className="form-group">
-          <label>View Span</label>
+          <label>表示期間</label>
           <input
             type="number"
             value={settings.viewSpanMonths}
@@ -85,30 +85,30 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate })
             disabled
           />
           <p className="help-text">
-            Currently fixed at 3 months (baseMonth - 1, baseMonth, baseMonth + 1).
+            現在は3ヶ月固定です（基準月-1、基準月、基準月+1）。
           </p>
         </div>
       </div>
 
       <div className="section">
-        <h2>External Teams</h2>
+        <h2>外部チーム</h2>
         
         <div className="add-item">
           <input
             type="text"
             value={newTeamName}
             onChange={(e) => setNewTeamName(e.target.value)}
-            placeholder="Team name (e.g., Product A Team)"
+            placeholder="チーム名（例：プロダクトAチーム）"
             onKeyPress={(e) => e.key === 'Enter' && handleAddExternalTeam()}
           />
           <button className="btn btn-primary" onClick={handleAddExternalTeam}>
-            Add Team
+            チーム追加
           </button>
         </div>
 
         <div className="items-list">
           {settings.externalTeams.length === 0 ? (
-            <p className="no-items">No external teams yet. Add one if needed!</p>
+            <p className="no-items">まだ外部チームがありません。必要に応じて追加してください！</p>
           ) : (
             settings.externalTeams.map((team) => (
               <div key={team.id} className="item">
@@ -124,13 +124,13 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate })
                       className="btn btn-primary btn-sm"
                       onClick={() => handleUpdateTeam(team.id, editingTeam.name)}
                     >
-                      Save
+                      保存
                     </button>
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => setEditingTeam(null)}
                     >
-                      Cancel
+                      キャンセル
                     </button>
                   </div>
                 ) : (
@@ -141,13 +141,13 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate })
                         className="btn btn-secondary btn-sm"
                         onClick={() => setEditingTeam(team)}
                       >
-                        Edit
+                        編集
                       </button>
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => handleRemoveTeam(team.id)}
                       >
-                        Remove
+                        削除
                       </button>
                     </div>
                   </>
@@ -159,28 +159,28 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate })
       </div>
 
       <div className="section">
-        <h2>About Settings</h2>
+        <h2>設定について</h2>
         <ul className="info-list">
-          <li>External teams are other departments or teams that may participate in tasks</li>
-          <li>Settings are stored on the Miro board and persist across sessions</li>
-          <li>Changes to the base month affect which calendar frames are visible</li>
+          <li>外部チームは、タスクに参加する可能性のある他部署またはチームです</li>
+          <li>設定はMiroボードに保存され、セッションをまたいで永続します</li>
+          <li>基準月の変更は、表示されるカレンダーフレームに影響します</li>
         </ul>
       </div>
 
       <div className="section stats">
-        <h2>Current Statistics</h2>
+        <h2>現在の統計</h2>
         <div className="stats-grid">
           <div className="stat-item">
             <div className="stat-value">{settings.devs.length}</div>
-            <div className="stat-label">Developers</div>
+            <div className="stat-label">開発者</div>
           </div>
           <div className="stat-item">
             <div className="stat-value">{settings.tracks.filter(t => t.active).length}</div>
-            <div className="stat-label">Active Tracks</div>
+            <div className="stat-label">有効トラック</div>
           </div>
           <div className="stat-item">
             <div className="stat-value">{settings.externalTeams.length}</div>
-            <div className="stat-label">External Teams</div>
+            <div className="stat-label">外部チーム</div>
           </div>
         </div>
       </div>

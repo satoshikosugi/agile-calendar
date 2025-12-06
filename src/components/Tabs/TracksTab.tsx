@@ -45,7 +45,7 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
   };
 
   const handleRemoveDev = (devId: string) => {
-    if (confirm('Are you sure you want to remove this developer?')) {
+    if (confirm('この開発者を削除してもよろしいですか？')) {
       const updatedSettings = {
         ...settings,
         devs: settings.devs.filter(dev => dev.id !== devId),
@@ -103,24 +103,24 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
   return (
     <div className="tracks-tab">
       <div className="section">
-        <h2>Developers</h2>
+        <h2>開発者</h2>
         
         <div className="add-item">
           <input
             type="text"
             value={newDevName}
             onChange={(e) => setNewDevName(e.target.value)}
-            placeholder="Developer name"
+            placeholder="開発者名"
             onKeyPress={(e) => e.key === 'Enter' && handleAddDev()}
           />
           <button className="btn btn-primary" onClick={handleAddDev}>
-            Add Dev
+            開発者追加
           </button>
         </div>
 
         <div className="items-list">
           {settings.devs.length === 0 ? (
-            <p className="no-items">No developers yet. Add one to get started!</p>
+            <p className="no-items">まだ開発者がいません。開始するには追加してください！</p>
           ) : (
             settings.devs.map((dev) => (
               <div key={dev.id} className="item">
@@ -136,13 +136,13 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
                       className="btn btn-primary btn-sm"
                       onClick={() => handleUpdateDev(dev.id, editingDev.name)}
                     >
-                      Save
+                      保存
                     </button>
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => setEditingDev(null)}
                     >
-                      Cancel
+                      キャンセル
                     </button>
                   </div>
                 ) : (
@@ -153,13 +153,13 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
                         className="btn btn-secondary btn-sm"
                         onClick={() => setEditingDev(dev)}
                       >
-                        Edit
+                        編集
                       </button>
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => handleRemoveDev(dev.id)}
                       >
-                        Remove
+                        削除
                       </button>
                     </div>
                   </>
@@ -171,24 +171,24 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
       </div>
 
       <div className="section">
-        <h2>Tracks</h2>
+        <h2>トラック</h2>
         
         <div className="add-item">
           <input
             type="text"
             value={newTrackName}
             onChange={(e) => setNewTrackName(e.target.value)}
-            placeholder="Track name (e.g., Track1)"
+            placeholder="トラック名（例：トラック1）"
             onKeyPress={(e) => e.key === 'Enter' && handleAddTrack()}
           />
           <button className="btn btn-primary" onClick={handleAddTrack}>
-            Add Track
+            トラック追加
           </button>
         </div>
 
         <div className="items-list">
           {settings.tracks.length === 0 ? (
-            <p className="no-items">No tracks yet. Add one to get started!</p>
+            <p className="no-items">まだトラックがありません。開始するには追加してください！</p>
           ) : (
             settings.tracks.map((track) => (
               <div key={track.id} className={`item ${!track.active ? 'inactive' : ''}`}>
@@ -204,13 +204,13 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
                       className="btn btn-primary btn-sm"
                       onClick={() => handleUpdateTrack(track.id, { name: editingTrack.name })}
                     >
-                      Save
+                      保存
                     </button>
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => setEditingTrack(null)}
                     >
-                      Cancel
+                      キャンセル
                     </button>
                   </div>
                 ) : (
@@ -218,7 +218,7 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
                     <div className="track-info">
                       <span className="item-name">{track.name}</span>
                       <span className="track-meta">
-                        Capacity: {track.capacity} | {track.active ? 'Active' : 'Inactive'}
+                        キャパシティ: {track.capacity} | {track.active ? '有効' : '無効'}
                       </span>
                     </div>
                     <div className="item-actions">
@@ -226,13 +226,13 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
                         className="btn btn-secondary btn-sm"
                         onClick={() => setEditingTrack(track)}
                       >
-                        Edit
+                        編集
                       </button>
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => handleToggleTrackActive(track.id)}
                       >
-                        {track.active ? 'Deactivate' : 'Activate'}
+                        {track.active ? '無効化' : '有効化'}
                       </button>
                     </div>
                   </>
@@ -244,13 +244,13 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
       </div>
 
       <div className="section">
-        <h2>About Tracks & Devs</h2>
+        <h2>トラックと開発者について</h2>
         <ul className="info-list">
-          <li>Developers (Devs) are team members who work on tasks</li>
-          <li>Tracks are work units that can contain up to 2 developers (pair programming)</li>
-          <li>Active tracks appear in the calendar and can be assigned to tasks</li>
-          <li>You can deactivate tracks without deleting them to preserve historical data</li>
-          <li>Daily track assignments will be managed separately to assign devs to tracks each day</li>
+          <li>開発者（Dev）はタスクに取り組むチームメンバーです</li>
+          <li>トラックは最大2名の開発者を含む作業単位です（ペアプログラミング）</li>
+          <li>有効なトラックはカレンダーに表示され、タスクに割り当てることができます</li>
+          <li>履歴データを保持するため、削除せずにトラックを無効化できます</li>
+          <li>日毎のトラック割り当ては別途管理され、毎日開発者をトラックに割り当てます</li>
         </ul>
       </div>
     </div>

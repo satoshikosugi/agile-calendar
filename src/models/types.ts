@@ -13,8 +13,8 @@ export interface Task {
   externalLink?: string;
   date?: string; // YYYY-MM-DD
   time?: {
-    start: string; // HH:MM
-    end: string; // HH:MM
+    startTime?: string; // HH:MM (9:00-18:00)
+    duration?: number; // minutes (5-480 in 5min increments)
   };
   roles: {
     pmId?: string;

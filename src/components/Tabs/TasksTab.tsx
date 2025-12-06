@@ -24,7 +24,7 @@ const TasksTab: React.FC = () => {
     const newTask: Task = {
       id: `task-${Date.now()}`,
       status: 'Draft',
-      title: 'New Task',
+      title: '新しいタスク',
       summary: '',
       roles: {
         designerIds: [],
@@ -93,15 +93,15 @@ const TasksTab: React.FC = () => {
     <div className="tasks-tab">
       <div className="tasks-list">
         <div className="tasks-header">
-          <h2>Tasks</h2>
+          <h2>タスク</h2>
           <button className="btn btn-primary" onClick={handleCreateTask}>
-            + New Task
+            + 新規タスク
           </button>
         </div>
         
         <div className="task-items">
           {tasks.length === 0 ? (
-            <p className="no-tasks">No tasks yet. Create your first task!</p>
+            <p className="no-tasks">まだタスクがありません。最初のタスクを作成しましょう！</p>
           ) : (
             tasks.map((task) => (
               <div
@@ -124,12 +124,12 @@ const TasksTab: React.FC = () => {
 
       {selectedTask && (
         <div className="task-detail">
-          <h3>{isEditing ? 'Edit Task' : 'Task Details'}</h3>
+          <h3>{isEditing ? 'タスク編集' : 'タスク詳細'}</h3>
           
           {isEditing ? (
             <div className="task-form">
               <div className="form-group">
-                <label>Title</label>
+                <label>タイトル</label>
                 <input
                   type="text"
                   value={selectedTask.title}
@@ -140,7 +140,7 @@ const TasksTab: React.FC = () => {
               </div>
 
               <div className="form-group">
-                <label>Summary</label>
+                <label>概要</label>
                 <textarea
                   rows={3}
                   value={selectedTask.summary}
@@ -151,7 +151,7 @@ const TasksTab: React.FC = () => {
               </div>
 
               <div className="form-group">
-                <label>Status</label>
+                <label>ステータス</label>
                 <select
                   value={selectedTask.status}
                   onChange={(e) =>
@@ -161,16 +161,16 @@ const TasksTab: React.FC = () => {
                     })
                   }
                 >
-                  <option value="Draft">Draft</option>
-                  <option value="Planned">Planned</option>
-                  <option value="Scheduled">Scheduled</option>
-                  <option value="Done">Done</option>
-                  <option value="Canceled">Canceled</option>
+                  <option value="Draft">下書き</option>
+                  <option value="Planned">計画済み</option>
+                  <option value="Scheduled">スケジュール済み</option>
+                  <option value="Done">完了</option>
+                  <option value="Canceled">キャンセル</option>
                 </select>
               </div>
 
               <div className="form-group">
-                <label>Date</label>
+                <label>日付</label>
                 <input
                   type="date"
                   value={selectedTask.date || ''}
@@ -181,42 +181,61 @@ const TasksTab: React.FC = () => {
               </div>
 
               <div className="form-group">
-                <label>Time Range</label>
-                <div className="time-inputs">
-                  <input
-                    type="time"
-                    value={selectedTask.time?.start || ''}
-                    onChange={(e) =>
-                      setSelectedTask({
-                        ...selectedTask,
-                        time: {
-                          start: e.target.value,
-                          end: selectedTask.time?.end || '',
-                        },
-                      })
-                    }
-                    placeholder="Start"
-                  />
-                  <span>to</span>
-                  <input
-                    type="time"
-                    value={selectedTask.time?.end || ''}
-                    onChange={(e) =>
-                      setSelectedTask({
-                        ...selectedTask,
-                        time: {
-                          start: selectedTask.time?.start || '',
-                          end: e.target.value,
-                        },
-                      })
-                    }
-                    placeholder="End"
-                  />
-                </div>
+                <label>開始時間（省略可）</label>
+                <select
+                  value={selectedTask.time?.startTime || ''}
+                  onChange={(e) =>
+                    setSelectedTask({
+                      ...selectedTask,
+                      time: e.target.value ? {
+                        startTime: e.target.value,
+                        duration: selectedTask.time?.duration,
+                      } : undefined,
+                    })
+                  }
+                >
+                  <option value="">未設定</option>
+                  {Array.from({ length: 109 }, (_, i) => {
+                    const totalMinutes = 9 * 60 + i * 5;
+                    if (totalMinutes > 18 * 60) return null;
+                    const hour = Math.floor(totalMinutes / 60);
+                    const min = totalMinutes % 60;
+                    const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+                    return <option key={time} value={time}>{time}</option>;
+                  })}
+                </select>
               </div>
 
               <div className="form-group">
-                <label>External Link</label>
+                <label>所要時間（省略可）</label>
+                <select
+                  value={selectedTask.time?.duration || ''}
+                  onChange={(e) =>
+                    setSelectedTask({
+                      ...selectedTask,
+                      time: e.target.value ? {
+                        startTime: selectedTask.time?.startTime,
+                        duration: parseInt(e.target.value),
+                      } : undefined,
+                    })
+                  }
+                >
+                  <option value="">未設定</option>
+                  {Array.from({ length: 96 }, (_, i) => {
+                    const minutes = (i + 1) * 5;
+                    if (minutes > 480) return null;
+                    const hours = Math.floor(minutes / 60);
+                    const mins = minutes % 60;
+                    const label = hours > 0 
+                      ? (mins > 0 ? `${hours}時間${mins}分` : `${hours}時間`)
+                      : `${mins}分`;
+                    return <option key={minutes} value={minutes}>{label}</option>;
+                  })}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>外部リンク</label>
                 <input
                   type="url"
                   value={selectedTask.externalLink || ''}
@@ -231,7 +250,7 @@ const TasksTab: React.FC = () => {
               </div>
 
               <div className="form-group">
-                <label>Dev Mode</label>
+                <label>開発モード</label>
                 <select
                   value={selectedTask.roles.devPlan.mode}
                   onChange={(e) =>
@@ -247,15 +266,15 @@ const TasksTab: React.FC = () => {
                     })
                   }
                 >
-                  <option value="NoDev">No Dev</option>
-                  <option value="Tracks">Tracks</option>
-                  <option value="AllDev">All Dev</option>
+                  <option value="NoDev">開発なし</option>
+                  <option value="Tracks">トラック</option>
+                  <option value="AllDev">全開発者</option>
                 </select>
               </div>
 
               {selectedTask.roles.devPlan.mode === 'Tracks' && (
                 <div className="form-group">
-                  <label>Required Track Count</label>
+                  <label>必要トラック数</label>
                   <input
                     type="number"
                     min="0"
@@ -278,7 +297,7 @@ const TasksTab: React.FC = () => {
 
               <div className="form-actions">
                 <button className="btn btn-primary" onClick={handleSaveTask}>
-                  Save
+                  保存
                 </button>
                 <button
                   className="btn btn-secondary"
@@ -289,55 +308,68 @@ const TasksTab: React.FC = () => {
                     }
                   }}
                 >
-                  Cancel
+                  キャンセル
                 </button>
               </div>
             </div>
           ) : (
             <div className="task-view">
               <div className="task-field">
-                <strong>Title:</strong> {selectedTask.title}
+                <strong>タイトル:</strong> {selectedTask.title}
               </div>
               <div className="task-field">
-                <strong>Summary:</strong> {selectedTask.summary || 'N/A'}
+                <strong>概要:</strong> {selectedTask.summary || 'なし'}
               </div>
               <div className="task-field">
-                <strong>Status:</strong> {selectedTask.status}
+                <strong>ステータス:</strong> {selectedTask.status}
               </div>
               <div className="task-field">
-                <strong>Date:</strong> {selectedTask.date || 'Not set'}
+                <strong>日付:</strong> {selectedTask.date || '未設定'}
               </div>
-              {selectedTask.time && (
+              {selectedTask.time?.startTime && (
                 <div className="task-field">
-                  <strong>Time:</strong> {selectedTask.time.start} - {selectedTask.time.end}
+                  <strong>開始時間:</strong> {selectedTask.time.startTime}
+                </div>
+              )}
+              {selectedTask.time?.duration && (
+                <div className="task-field">
+                  <strong>所要時間:</strong> {
+                    (() => {
+                      const hours = Math.floor(selectedTask.time.duration / 60);
+                      const mins = selectedTask.time.duration % 60;
+                      return hours > 0 
+                        ? (mins > 0 ? `${hours}時間${mins}分` : `${hours}時間`)
+                        : `${mins}分`;
+                    })()
+                  }
                 </div>
               )}
               {selectedTask.externalLink && (
                 <div className="task-field">
-                  <strong>Link:</strong>{' '}
+                  <strong>リンク:</strong>{' '}
                   <a href={selectedTask.externalLink} target="_blank" rel="noopener noreferrer">
                     {selectedTask.externalLink}
                   </a>
                 </div>
               )}
               <div className="task-field">
-                <strong>Dev Mode:</strong> {selectedTask.roles.devPlan.mode}
+                <strong>開発モード:</strong> {selectedTask.roles.devPlan.mode}
               </div>
               {selectedTask.roles.devPlan.mode === 'Tracks' && (
                 <div className="task-field">
-                  <strong>Required Tracks:</strong> {selectedTask.roles.devPlan.requiredTrackCount}
+                  <strong>必要トラック:</strong> {selectedTask.roles.devPlan.requiredTrackCount}
                 </div>
               )}
 
               <div className="form-actions">
                 <button className="btn btn-primary" onClick={() => setIsEditing(true)}>
-                  Edit
+                  編集
                 </button>
                 <button
                   className="btn btn-secondary"
                   onClick={() => handleDeleteTask(selectedTask.id)}
                 >
-                  Delete
+                  削除
                 </button>
               </div>
             </div>

@@ -17,10 +17,15 @@ const getDefaultSettings = (): Settings => ({
 
 // Find or create the settings shape (invisible shape to store settings)
 async function getSettingsShape() {
-  const shapes = await miro.board.get({ type: 'shape', tags: [SETTINGS_TAG] });
-  
-  if (shapes.length > 0) {
-    return shapes[0];
+  try {
+    const shapes = await miro.board.get({ type: 'shape' });
+    const settingsShape = shapes.find((s: any) => s.tags?.includes(SETTINGS_TAG));
+    
+    if (settingsShape) {
+      return settingsShape;
+    }
+  } catch (error) {
+    console.warn('Error finding settings shape:', error);
   }
   
   // Create a new invisible shape to store settings

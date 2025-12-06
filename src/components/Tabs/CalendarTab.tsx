@@ -19,10 +19,10 @@ const CalendarTab: React.FC<CalendarTabProps> = ({ settings, onSettingsUpdate })
     setLoading(true);
     try {
       await generateCalendar(settings);
-      alert('Calendar generated successfully!');
+      alert('カレンダーを生成しました！');
     } catch (error) {
       console.error('Error generating calendar:', error);
-      alert('Failed to generate calendar');
+      alert('カレンダーの生成に失敗しました');
     } finally {
       setLoading(false);
     }
@@ -35,7 +35,7 @@ const CalendarTab: React.FC<CalendarTabProps> = ({ settings, onSettingsUpdate })
       onSettingsUpdate(newSettings);
     } catch (error) {
       console.error('Error navigating to previous month:', error);
-      alert('Failed to navigate to previous month');
+      alert('前月への移動に失敗しました');
     } finally {
       setLoading(false);
     }
@@ -48,7 +48,7 @@ const CalendarTab: React.FC<CalendarTabProps> = ({ settings, onSettingsUpdate })
       onSettingsUpdate(newSettings);
     } catch (error) {
       console.error('Error navigating to next month:', error);
-      alert('Failed to navigate to next month');
+      alert('次月への移動に失敗しました');
     } finally {
       setLoading(false);
     }
@@ -61,15 +61,15 @@ const CalendarTab: React.FC<CalendarTabProps> = ({ settings, onSettingsUpdate })
 
   return (
     <div className="calendar-tab">
-      <h2>Calendar Management</h2>
+      <h2>カレンダー管理</h2>
       
       <div className="calendar-info">
         <p>
-          Current base month: <strong>{formatMonth(settings.baseMonth)}</strong>
+          現在の基準月: <strong>{formatMonth(settings.baseMonth)}</strong>
         </p>
         <p>
-          The calendar displays 3 months: {formatMonth(getPreviousMonth(settings.baseMonth))},{' '}
-          {formatMonth(settings.baseMonth)}, and {formatMonth(getNextMonth(settings.baseMonth))}
+          カレンダーは3ヶ月表示します: {formatMonth(getPreviousMonth(settings.baseMonth))}、{' '}
+          {formatMonth(settings.baseMonth)}、{formatMonth(getNextMonth(settings.baseMonth))}
         </p>
       </div>
 
@@ -79,19 +79,19 @@ const CalendarTab: React.FC<CalendarTabProps> = ({ settings, onSettingsUpdate })
           onClick={handleGenerateCalendar}
           disabled={loading}
         >
-          {loading ? 'Generating...' : 'Generate/Update Calendar'}
+          {loading ? '生成中...' : 'カレンダー生成/更新'}
         </button>
       </div>
 
       <div className="calendar-navigation">
-        <h3>Navigate Calendar</h3>
+        <h3>カレンダーナビゲーション</h3>
         <div className="nav-buttons">
           <button
             className="btn btn-secondary"
             onClick={handlePreviousMonth}
             disabled={loading}
           >
-            ← Previous Month
+            ← 前月
           </button>
           <div className="current-month">{formatMonth(settings.baseMonth)}</div>
           <button
@@ -99,19 +99,19 @@ const CalendarTab: React.FC<CalendarTabProps> = ({ settings, onSettingsUpdate })
             onClick={handleNextMonth}
             disabled={loading}
           >
-            Next Month →
+            次月 →
           </button>
         </div>
       </div>
 
       <div className="calendar-description">
-        <h3>About the Calendar</h3>
+        <h3>カレンダーについて</h3>
         <ul>
-          <li>The calendar is generated on the Miro board as frames</li>
-          <li>Each month is displayed as a separate frame</li>
-          <li>Rows represent: PM, Designer, and active Tracks</li>
-          <li>Tasks will be placed in the appropriate date and row cells</li>
-          <li>Use the navigation buttons to move between months</li>
+          <li>カレンダーはMiroボード上にフレームとして生成されます</li>
+          <li>各月は個別のフレームとして表示されます</li>
+          <li>行はPM、デザイナー、および有効なトラックを表します</li>
+          <li>タスクは適切な日付と行のセルに配置されます</li>
+          <li>ナビゲーションボタンを使用して月間を移動します</li>
         </ul>
       </div>
     </div>

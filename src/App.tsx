@@ -5,31 +5,44 @@ import TasksTab from './components/Tabs/TasksTab';
 import CalendarTab from './components/Tabs/CalendarTab';
 import TracksTab from './components/Tabs/TracksTab';
 import SettingsTab from './components/Tabs/SettingsTab';
+import { getMiro } from './miro';
 import './App.css';
 
 type TabType = 'tasks' | 'calendar' | 'tracks' | 'settings';
-
-// Check if running in actual Miro environment (inside iframe)
-const isMiroEnvironment = (() => {
-  try {
-    return typeof window !== 'undefined' && 
-           (window as any).miro && 
-           window.parent !== window;
-  } catch {
-    return false;
-  }
-})();
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('tasks');
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [miroReady, setMiroReady] = useState(false);
 
   useEffect(() => {
     const init = async () => {
-      const loadedSettings = await loadSettings();
-      setSettings(loadedSettings);
-      setLoading(false);
+      try {
+        // Initialize Miro SDK first
+        const miroInstance = await getMiro();
+        
+        // Check if we're using real Miro or mock
+        const isRealMiro = miroInstance && typeof miroInstance.board?.getInfo === 'function';
+        setMiroReady(isRealMiro);
+        
+        if (isRealMiro) {
+          console.log('✅ Connected to Miro board');
+        } else {
+          console.log('📦 Using mock mode - data stored in browser');
+        }
+        
+        // Then load settings
+        const loadedSettings = await loadSettings();
+        setSettings(loadedSettings);
+      } catch (error) {
+        console.error('❌ Initialization error:', error);
+        // Continue with mock data
+        const loadedSettings = await loadSettings();
+        setSettings(loadedSettings);
+      } finally {
+        setLoading(false);
+      }
     };
     init();
   }, []);
@@ -40,20 +53,21 @@ const App: React.FC = () => {
   };
 
   if (loading || !settings) {
-    return <div className="loading">Loading...</div>;
+    return <div className="loading">Miro SDKを初期化中...</div>;
   }
 
   return (
     <div className="app">
-      {!isMiroEnvironment && (
+      {!miroReady && (
         <div style={{
-          background: '#fff3cd',
+          background: '#d1ecf1',
           padding: '10px',
-          borderBottom: '1px solid #ffc107',
+          borderBottom: '1px solid #0c5460',
           textAlign: 'center',
           fontSize: '14px',
+          color: '#0c5460',
         }}>
-          ⚠️ 開発モード: このアプリはMiroボード内で動作するように設計されています
+          📦 モックモード: データはブラウザに保存されます（Miroボードとは同期されません）
         </div>
       )}
       <div className="tabs">
@@ -61,25 +75,25 @@ const App: React.FC = () => {
           className={activeTab === 'tasks' ? 'tab active' : 'tab'}
           onClick={() => setActiveTab('tasks')}
         >
-          Tasks
+          タスク
         </button>
         <button
           className={activeTab === 'calendar' ? 'tab active' : 'tab'}
           onClick={() => setActiveTab('calendar')}
         >
-          Calendar
+          カレンダー
         </button>
         <button
           className={activeTab === 'tracks' ? 'tab active' : 'tab'}
           onClick={() => setActiveTab('tracks')}
         >
-          Tracks & Devs
+          トラック & 開発者
         </button>
         <button
           className={activeTab === 'settings' ? 'tab active' : 'tab'}
           onClick={() => setActiveTab('settings')}
         >
-          Settings
+          設定
         </button>
       </div>
 

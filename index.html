@@ -3,16 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <title>Agile Calendar - Miro Standup Scheduler</title>
-    <!-- Miro SDK will be loaded only in production/Miro environment -->
-    <script>
-      // Load Miro SDK only if we're in an iframe (Miro panel)
-      if (window.parent !== window) {
-        const script = document.createElement('script');
-        script.src = 'https://miro.com/app/static/sdk/v2/miro.js';
-        document.head.appendChild(script);
-      }
-    </script>
+    <!-- Always load Miro SDK for proper app detection -->
+    <script src="https://miro.com/app/static/sdk/v2/miro.js"></script>
   </head>
   <body>
     <div id="root"></div>
