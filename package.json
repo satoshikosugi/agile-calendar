@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "powershell -ExecutionPolicy Bypass -File ./deploy-gh-pages.ps1"
   },
   "keywords": ["miro", "agile", "standup", "calendar"],
   "author": "",
