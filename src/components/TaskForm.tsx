@@ -207,6 +207,16 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
         />
       </div>
 
+      <div className="form-group">
+        <label>外部リンク (URL)</label>
+        <input
+          type="url"
+          value={task.externalLink || ''}
+          onChange={(e) => setTask({ ...task, externalLink: e.target.value || undefined })}
+          placeholder="https://..."
+        />
+      </div>
+
         <div className="form-group">
           <label>ステータス</label>
           <select

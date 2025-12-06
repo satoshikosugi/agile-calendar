@@ -12,11 +12,20 @@ export async function createTask(task: Task): Promise<Task> {
     const settings = await loadSettings();
     const position = calculateTaskPosition(task, settings);
 
+    // Format sticky note content to include key information
+    let content = task.title;
+    if (task.time && task.time.startTime) {
+      content = `${task.time.startTime} ${task.title}`;
+    }
+
     const stickyNote = await miro.board.createStickyNote({
-      content: task.title,
+      content: content,
       x: position.x,
       y: position.y,
-      width: 200,
+      width: 150,
+      style: {
+        fillColor: getTaskColor(task),
+      },
     });
     
     await stickyNote.setMetadata('appType', 'task');
@@ -26,10 +35,72 @@ export async function createTask(task: Task): Promise<Task> {
     await stickyNote.setMetadata(TASK_METADATA_KEY, cleanTask);
     await stickyNote.sync();
     
+    // If task has an external link, create a linked shape next to it
+    if (task.externalLink) {
+      await createExternalLinkIndicator(stickyNote, task.externalLink);
+    }
+    
     return task;
   } catch (error) {
     console.error('Error creating task:', error);
     throw error;
+  }
+}
+
+// Helper function to create an external link indicator
+async function createExternalLinkIndicator(stickyNote: any, url: string): Promise<void> {
+  try {
+    // Create a small shape with a link icon next to the sticky note
+    const linkShape = await miro.board.createShape({
+      shape: 'circle',
+      x: stickyNote.x + 90, // Position to the right of the sticky note
+      y: stickyNote.y - 60, // Position above
+      width: 24,
+      height: 24,
+      style: {
+        fillColor: '#2196F3',
+        borderColor: '#1976D2',
+        borderWidth: 2,
+      },
+    });
+
+    // Create text with link emoji
+    await miro.board.createText({
+      content: '🔗',
+      x: stickyNote.x + 90,
+      y: stickyNote.y - 60,
+      width: 24,
+      style: {
+        fontSize: 14,
+        textAlign: 'center',
+        fillColor: 'transparent',
+      },
+    });
+
+    // Set metadata to link this shape to the task
+    await linkShape.setMetadata('appType', 'taskLink');
+    await linkShape.setMetadata('taskId', (await stickyNote.getMetadata(TASK_METADATA_KEY)).id);
+    await linkShape.setMetadata('url', url);
+  } catch (error) {
+    console.error('Error creating external link indicator:', error);
+  }
+}
+
+// Helper function to get task color based on status
+function getTaskColor(task: Task): string {
+  switch (task.status) {
+    case 'Draft':
+      return '#fef9e7'; // Light yellow
+    case 'Planned':
+      return '#e8f5e9'; // Light green
+    case 'Scheduled':
+      return '#e3f2fd'; // Light blue
+    case 'Done':
+      return '#f5f5f5'; // Gray
+    case 'Canceled':
+      return '#ffebee'; // Light red
+    default:
+      return '#ffffff'; // White
   }
 }
 
@@ -71,7 +142,11 @@ export async function updateTask(task: Task): Promise<void> {
       const metadata = await note.getMetadata(TASK_METADATA_KEY);
       if (metadata && (metadata as Task).id === task.id) {
         // Update sticky note content
-        note.content = task.title;
+        let content = task.title;
+        if (task.time && task.time.startTime) {
+          content = `${task.time.startTime} ${task.title}`;
+        }
+        note.content = content;
         
         // Update position if date changed
         const settings = await loadSettings();
@@ -79,10 +154,20 @@ export async function updateTask(task: Task): Promise<void> {
         note.x = position.x;
         note.y = position.y;
 
+        // Update color based on status
+        note.style = {
+          ...note.style,
+          fillColor: getTaskColor(task),
+        };
+
         // Sanitize task object to remove undefined values which Miro SDK doesn't like
         const cleanTask = JSON.parse(JSON.stringify(task));
         await note.setMetadata(TASK_METADATA_KEY, cleanTask);
         await note.sync();
+
+        // Handle external link indicator
+        await updateExternalLinkIndicator(note, task);
+        
         return;
       }
     }
@@ -94,6 +179,36 @@ export async function updateTask(task: Task): Promise<void> {
   }
 }
 
+// Helper function to update external link indicator
+async function updateExternalLinkIndicator(stickyNote: any, task: Task): Promise<void> {
+  try {
+    // Find existing link indicator
+    const allShapes = await miro.board.get({ type: 'shape' });
+    const taskId = (await stickyNote.getMetadata(TASK_METADATA_KEY)).id;
+    
+    const existingLinkShapes = [];
+    for (const shape of allShapes) {
+      const appType = await shape.getMetadata('appType');
+      const linkedTaskId = await shape.getMetadata('taskId');
+      if (appType === 'taskLink' && linkedTaskId === taskId) {
+        existingLinkShapes.push(shape);
+      }
+    }
+
+    // Remove existing link indicators
+    for (const shape of existingLinkShapes) {
+      await miro.board.remove(shape);
+    }
+
+    // Create new link indicator if task has external link
+    if (task.externalLink) {
+      await createExternalLinkIndicator(stickyNote, task.externalLink);
+    }
+  } catch (error) {
+    console.error('Error updating external link indicator:', error);
+  }
+}
+
 // Delete a task
 export async function deleteTask(taskId: string): Promise<void> {
   try {
@@ -102,6 +217,17 @@ export async function deleteTask(taskId: string): Promise<void> {
     for (const note of stickyNotes) {
       const metadata = await note.getMetadata(TASK_METADATA_KEY);
       if (metadata && (metadata as Task).id === taskId) {
+        // Remove associated link indicators
+        const allShapes = await miro.board.get({ type: 'shape' });
+        for (const shape of allShapes) {
+          const appType = await shape.getMetadata('appType');
+          const linkedTaskId = await shape.getMetadata('taskId');
+          if (appType === 'taskLink' && linkedTaskId === taskId) {
+            await miro.board.remove(shape);
+          }
+        }
+        
+        // Remove the sticky note
         await miro.board.remove(note);
         return;
       }

@@ -13,9 +13,10 @@ export async function generateCalendar(settings: Settings): Promise<void> {
     months.push(monthDate);
   }
   
-  const frameWidth = 2000;
-  const frameHeight = 1500;
-  const frameSpacing = 200;
+  // New larger dimensions for monthly calendar layout
+  const frameWidth = 2800; // 7 days * 400px per day
+  const frameHeight = 2400; // 6 weeks * 400px per week
+  const frameSpacing = 300;
   const startX = 0;
   const startY = 0;
   
@@ -41,75 +42,150 @@ export async function generateCalendar(settings: Settings): Promise<void> {
         width: frameWidth,
         height: frameHeight,
         style: {
-          fillColor: '#f5f5f5',
+          fillColor: '#ffffff',
         },
       });
       
-      // Add basic calendar structure within the frame
-      await createCalendarGrid(frame, monthDate, settings);
+      // Add monthly calendar structure within the frame
+      await createMonthlyCalendarGrid(frame, monthDate, settings);
     }
   }
 }
 
-// Create the calendar grid inside a frame
-async function createCalendarGrid(
+// Create a monthly calendar grid (weeks as rows, days as columns)
+async function createMonthlyCalendarGrid(
   frame: any,
   monthDate: Date,
-  settings: Settings
+  _settings: Settings
 ): Promise<void> {
   const year = monthDate.getFullYear();
   const month = monthDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
   
   const frameX = frame.x;
   const frameY = frame.y;
   const frameWidth = frame.width;
   const frameHeight = frame.height;
   
-  // Calculate grid dimensions
-  const headerHeight = 100;
-  const rowHeight = (frameHeight - headerHeight) / (settings.tracks.filter(t => t.active).length + 3); // PM, Designer, Tracks
-  const colWidth = frameWidth / daysInMonth;
+  // Calendar layout constants
+  const headerHeight = 80;
+  const dayOfWeekHeaderHeight = 40;
+  const colWidth = frameWidth / 7; // 7 days per week
+  const numWeeks = 6; // Max weeks in a month
+  const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
   
-  // Create header row with dates
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(year, month, day);
-    const dayOfWeek = date.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    
-    const x = frameX - frameWidth / 2 + colWidth * (day - 0.5);
-    const y = frameY - frameHeight / 2 + headerHeight / 2;
+  // Month title
+  const monthNameJa = ['1月', '2月', '3月', '4月', '5月', '6月',
+                       '7月', '8月', '9月', '10月', '11月', '12月'];
+  
+  await miro.board.createText({
+    content: `${year}年 ${monthNameJa[month]}`,
+    x: frameX,
+    y: frameY - frameHeight / 2 + headerHeight / 2,
+    width: frameWidth - 40,
+    style: {
+      fontSize: 24,
+      fontFamily: 'arial',
+      color: '#1a1a1a',
+      textAlign: 'center',
+      fillColor: 'transparent',
+    },
+  });
+  
+  // Day of week headers (Sun, Mon, Tue, Wed, Thu, Fri, Sat)
+  const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
+  const weekendDays = [0, 6]; // Sunday and Saturday
+  
+  for (let dow = 0; dow < 7; dow++) {
+    const x = frameX - frameWidth / 2 + colWidth * (dow + 0.5);
+    const y = frameY - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight / 2;
+    const isWeekend = weekendDays.includes(dow);
     
     await miro.board.createText({
-      content: `${day}`,
+      content: daysOfWeek[dow],
       x,
       y,
       width: colWidth - 10,
       style: {
-        fontSize: 14,
-        color: isWeekend ? '#999999' : '#000000',
+        fontSize: 16,
+        fontFamily: 'arial',
+        color: isWeekend ? '#d32f2f' : '#424242',
         textAlign: 'center',
+        fillColor: 'transparent',
       },
     });
   }
   
-  // Create row labels (PM, Designer, Tracks)
-  const rows = ['PM', 'Designer', ...settings.tracks.filter(t => t.active).map(t => t.name)];
+  // Draw grid lines and day numbers
+  const firstDay = new Date(year, month, 1);
+  const firstDayOfWeek = firstDay.getDay(); // 0 = Sunday
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   
-  for (let i = 0; i < rows.length; i++) {
-    const x = frameX - frameWidth / 2 + 80;
-    const y = frameY - frameHeight / 2 + headerHeight + rowHeight * (i + 0.5);
-    
-    await miro.board.createText({
-      content: rows[i],
-      x,
-      y,
-      width: 150,
-      style: {
-        fontSize: 12,
-        textAlign: 'left',
-      },
-    });
+  const contentStartY = frameY - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight;
+  
+  // Draw cells for each day
+  let dayCounter = 1;
+  for (let week = 0; week < numWeeks; week++) {
+    for (let dow = 0; dow < 7; dow++) {
+      const cellX = frameX - frameWidth / 2 + colWidth * dow;
+      const cellY = contentStartY + rowHeight * week;
+      const isWeekend = weekendDays.includes(dow);
+      
+      // Draw cell background
+      const cellCenterX = cellX + colWidth / 2;
+      const cellCenterY = cellY + rowHeight / 2;
+      
+      // Only draw day number if this cell should have a day
+      if ((week === 0 && dow >= firstDayOfWeek) || 
+          (week > 0 && dayCounter <= daysInMonth)) {
+        
+        if (dayCounter <= daysInMonth) {
+          // Draw cell border
+          await miro.board.createShape({
+            shape: 'rectangle',
+            x: cellCenterX,
+            y: cellCenterY,
+            width: colWidth - 4,
+            height: rowHeight - 4,
+            style: {
+              borderColor: isWeekend ? '#ffebee' : '#e0e0e0',
+              borderWidth: 1,
+              fillColor: isWeekend ? '#fafafa' : '#ffffff',
+            },
+          });
+          
+          // Day number in top-left corner of cell
+          await miro.board.createText({
+            content: `${dayCounter}`,
+            x: cellX + 25,
+            y: cellY + 20,
+            width: 40,
+            style: {
+              fontSize: 14,
+              fontFamily: 'arial',
+              color: isWeekend ? '#d32f2f' : '#424242',
+              textAlign: 'center',
+              fillColor: 'transparent',
+            },
+          });
+          
+          // Divider line between team tasks (left) and personal schedules (right)
+          const dividerX = cellCenterX;
+          await miro.board.createShape({
+            shape: 'rectangle',
+            x: dividerX,
+            y: cellCenterY,
+            width: 1,
+            height: rowHeight - 8,
+            style: {
+              borderWidth: 0,
+              fillColor: '#bdbdbd',
+            },
+          });
+          
+          dayCounter++;
+        }
+      }
+    }
   }
 }
 
@@ -154,54 +230,85 @@ export async function navigateToNextMonth(settings: Settings): Promise<Settings>
 }
 
 // Calculate position for a task on the calendar
-export function calculateTaskPosition(task: Task, settings: Settings): { x: number, y: number } {
+export function calculateTaskPosition(
+  task: Task, 
+  settings: Settings,
+  isPersonalSchedule: boolean = false
+): { x: number, y: number } {
   if (!task.date) return { x: 0, y: 0 };
 
   const taskDate = new Date(task.date);
   const baseDate = new Date(settings.baseMonth + '-01');
   
-  // Calculate month difference
+  // Calculate month difference to determine which frame
   const diffYear = taskDate.getFullYear() - baseDate.getFullYear();
   const diffMonth = diffYear * 12 + taskDate.getMonth() - baseDate.getMonth();
   
   // Frame constants (must match generateCalendar)
-  const frameWidth = 2000;
-  const frameHeight = 1500;
-  const frameSpacing = 200;
+  const frameWidth = 2800;
+  const frameHeight = 2400;
+  const frameSpacing = 300;
   const startX = 0;
   const startY = 0;
   
   const frameX = startX + diffMonth * (frameWidth + frameSpacing);
   const frameY = startY;
   
-  // Calculate column (day)
-  const daysInMonth = new Date(taskDate.getFullYear(), taskDate.getMonth() + 1, 0).getDate();
-  const colWidth = frameWidth / daysInMonth;
+  // Calculate position within the monthly calendar grid
+  const year = taskDate.getFullYear();
+  const month = taskDate.getMonth();
   const day = taskDate.getDate();
-  const x = frameX - frameWidth / 2 + colWidth * (day - 0.5);
   
-  // Calculate row
-  let rowIndex = 0; // Default to PM
+  // Find which week and day of week this date is
+  const firstDay = new Date(year, month, 1);
+  const firstDayOfWeek = firstDay.getDay();
+  const daysSinceFirstOfMonth = day - 1;
+  const totalDayOffset = firstDayOfWeek + daysSinceFirstOfMonth;
   
-  const activeTracks = settings.tracks.filter(t => t.active);
+  const weekRow = Math.floor(totalDayOffset / 7);
+  const dayOfWeek = totalDayOffset % 7;
   
-  if (task.roles.devPlan.assignedTrackIds.length > 0) {
-    // Find the index of the first assigned track
-    const trackId = task.roles.devPlan.assignedTrackIds[0];
-    const trackIndex = activeTracks.findIndex(t => t.id === trackId);
-    if (trackIndex !== -1) {
-      rowIndex = 2 + trackIndex; // 0: PM, 1: Designer, 2+: Tracks
+  // Calendar layout constants (must match createMonthlyCalendarGrid)
+  const headerHeight = 80;
+  const dayOfWeekHeaderHeight = 40;
+  const colWidth = frameWidth / 7;
+  const numWeeks = 6;
+  const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
+  
+  const contentStartY = frameY - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight;
+  
+  // Calculate cell position
+  const cellX = frameX - frameWidth / 2 + colWidth * dayOfWeek;
+  const cellY = contentStartY + rowHeight * weekRow;
+  
+  // Position within the cell
+  // Left half for team tasks, right half for personal schedules
+  const cellCenterX = cellX + colWidth / 2;
+  const cellCenterY = cellY + rowHeight / 2;
+  
+  // Offset from center based on whether it's a team task or personal schedule
+  const horizontalOffset = isPersonalSchedule ? colWidth / 4 : -colWidth / 4;
+  
+  // Calculate vertical position based on time if available
+  let verticalOffset = 0;
+  if (task.time && task.time.startTime) {
+    const [hours, minutes] = task.time.startTime.split(':').map(Number);
+    const timeInMinutes = hours * 60 + minutes;
+    // Map 9:00-18:00 (540-1080 minutes) to position within cell
+    const workDayStart = 9 * 60; // 9:00
+    const workDayEnd = 18 * 60; // 18:00
+    const workDayRange = workDayEnd - workDayStart;
+    
+    if (timeInMinutes >= workDayStart && timeInMinutes <= workDayEnd) {
+      const normalizedTime = (timeInMinutes - workDayStart) / workDayRange;
+      // Use about 60% of cell height for time-based positioning, leaving room at top for day number
+      const usableHeight = rowHeight * 0.6;
+      verticalOffset = (normalizedTime - 0.5) * usableHeight + 30; // +30 to leave room for day number
     }
-  } else if (task.roles.designerIds.length > 0) {
-    rowIndex = 1;
-  } else if (task.roles.pmId) {
-    rowIndex = 0;
   }
   
-  const headerHeight = 100;
-  const rowHeight = (frameHeight - headerHeight) / (activeTracks.length + 3);
-  
-  const y = frameY - frameHeight / 2 + headerHeight + rowHeight * (rowIndex + 0.5);
-  
-  return { x, y };
+  return { 
+    x: cellCenterX + horizontalOffset,
+    y: cellCenterY + verticalOffset
+  };
 }
