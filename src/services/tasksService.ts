@@ -5,6 +5,34 @@ import { calculateTaskPosition } from './calendarLayoutService';
 
 const TASK_METADATA_KEY = 'task';
 
+// Visual positioning constants for external link indicators
+const LINK_INDICATOR_OFFSET_X = 90;
+const LINK_INDICATOR_OFFSET_Y = -60;
+const LINK_INDICATOR_SIZE = 24;
+
+// Helper function to remove existing link indicators for a task
+async function removeExistingLinkShapes(taskId: string): Promise<void> {
+  const allShapes = await miro.board.get({ type: 'shape' });
+  const allTexts = await miro.board.get({ type: 'text' });
+  
+  for (const shape of allShapes) {
+    const appType = await shape.getMetadata('appType');
+    const linkedTaskId = await shape.getMetadata('taskId');
+    if (appType === 'taskLink' && linkedTaskId === taskId) {
+      await miro.board.remove(shape);
+    }
+  }
+  
+  // Also remove text elements associated with the link
+  for (const text of allTexts) {
+    const appType = await text.getMetadata('appType');
+    const linkedTaskId = await text.getMetadata('taskId');
+    if (appType === 'taskLink' && linkedTaskId === taskId) {
+      await miro.board.remove(text);
+    }
+  }
+}
+
 // Create a new task as a sticky note on the board
 export async function createTask(task: Task): Promise<Task> {
   try {
@@ -53,10 +81,10 @@ async function createExternalLinkIndicator(stickyNote: any, url: string): Promis
     // Create a small shape with a link icon next to the sticky note
     const linkShape = await miro.board.createShape({
       shape: 'circle',
-      x: stickyNote.x + 90, // Position to the right of the sticky note
-      y: stickyNote.y - 60, // Position above
-      width: 24,
-      height: 24,
+      x: stickyNote.x + LINK_INDICATOR_OFFSET_X,
+      y: stickyNote.y + LINK_INDICATOR_OFFSET_Y,
+      width: LINK_INDICATOR_SIZE,
+      height: LINK_INDICATOR_SIZE,
       style: {
         fillColor: '#2196F3',
         borderColor: '#1976D2',
@@ -65,11 +93,11 @@ async function createExternalLinkIndicator(stickyNote: any, url: string): Promis
     });
 
     // Create text with link emoji
-    await miro.board.createText({
+    const linkText = await miro.board.createText({
       content: '🔗',
-      x: stickyNote.x + 90,
-      y: stickyNote.y - 60,
-      width: 24,
+      x: stickyNote.x + LINK_INDICATOR_OFFSET_X,
+      y: stickyNote.y + LINK_INDICATOR_OFFSET_Y,
+      width: LINK_INDICATOR_SIZE,
       style: {
         fontSize: 14,
         textAlign: 'center',
@@ -77,10 +105,13 @@ async function createExternalLinkIndicator(stickyNote: any, url: string): Promis
       },
     });
 
-    // Set metadata to link this shape to the task
+    // Set metadata to link these elements to the task
+    const taskId = (await stickyNote.getMetadata(TASK_METADATA_KEY)).id;
     await linkShape.setMetadata('appType', 'taskLink');
-    await linkShape.setMetadata('taskId', (await stickyNote.getMetadata(TASK_METADATA_KEY)).id);
+    await linkShape.setMetadata('taskId', taskId);
     await linkShape.setMetadata('url', url);
+    await linkText.setMetadata('appType', 'taskLink');
+    await linkText.setMetadata('taskId', taskId);
   } catch (error) {
     console.error('Error creating external link indicator:', error);
   }
@@ -182,23 +213,10 @@ export async function updateTask(task: Task): Promise<void> {
 // Helper function to update external link indicator
 async function updateExternalLinkIndicator(stickyNote: any, task: Task): Promise<void> {
   try {
-    // Find existing link indicator
-    const allShapes = await miro.board.get({ type: 'shape' });
     const taskId = (await stickyNote.getMetadata(TASK_METADATA_KEY)).id;
     
-    const existingLinkShapes = [];
-    for (const shape of allShapes) {
-      const appType = await shape.getMetadata('appType');
-      const linkedTaskId = await shape.getMetadata('taskId');
-      if (appType === 'taskLink' && linkedTaskId === taskId) {
-        existingLinkShapes.push(shape);
-      }
-    }
-
-    // Remove existing link indicators
-    for (const shape of existingLinkShapes) {
-      await miro.board.remove(shape);
-    }
+    // Remove existing link indicators using the helper function
+    await removeExistingLinkShapes(taskId);
 
     // Create new link indicator if task has external link
     if (task.externalLink) {
@@ -217,15 +235,8 @@ export async function deleteTask(taskId: string): Promise<void> {
     for (const note of stickyNotes) {
       const metadata = await note.getMetadata(TASK_METADATA_KEY);
       if (metadata && (metadata as Task).id === taskId) {
-        // Remove associated link indicators
-        const allShapes = await miro.board.get({ type: 'shape' });
-        for (const shape of allShapes) {
-          const appType = await shape.getMetadata('appType');
-          const linkedTaskId = await shape.getMetadata('taskId');
-          if (appType === 'taskLink' && linkedTaskId === taskId) {
-            await miro.board.remove(shape);
-          }
-        }
+        // Remove associated link indicators using the helper function
+        await removeExistingLinkShapes(taskId);
         
         // Remove the sticky note
         await miro.board.remove(note);

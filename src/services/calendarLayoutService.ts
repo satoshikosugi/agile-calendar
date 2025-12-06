@@ -1,6 +1,15 @@
 import { miro } from '../miro';
 import { Settings, Task } from '../models/types';
 
+// Calendar layout constants
+const CALENDAR_FRAME_WIDTH = 2800;
+const CALENDAR_FRAME_HEIGHT = 2400;
+const CALENDAR_FRAME_SPACING = 300;
+
+// Work hours configuration (in minutes from midnight)
+const WORK_DAY_START_MINUTES = 9 * 60;  // 9:00 AM
+const WORK_DAY_END_MINUTES = 18 * 60;   // 6:00 PM
+
 // Generate 3-month calendar frames on the board
 export async function generateCalendar(settings: Settings): Promise<void> {
   const baseDate = new Date(settings.baseMonth + '-01');
@@ -14,9 +23,9 @@ export async function generateCalendar(settings: Settings): Promise<void> {
   }
   
   // New larger dimensions for monthly calendar layout
-  const frameWidth = 2800; // 7 days * 400px per day
-  const frameHeight = 2400; // 6 weeks * 400px per week
-  const frameSpacing = 300;
+  const frameWidth = CALENDAR_FRAME_WIDTH;
+  const frameHeight = CALENDAR_FRAME_HEIGHT;
+  const frameSpacing = CALENDAR_FRAME_SPACING;
   const startX = 0;
   const startY = 0;
   
@@ -245,9 +254,9 @@ export function calculateTaskPosition(
   const diffMonth = diffYear * 12 + taskDate.getMonth() - baseDate.getMonth();
   
   // Frame constants (must match generateCalendar)
-  const frameWidth = 2800;
-  const frameHeight = 2400;
-  const frameSpacing = 300;
+  const frameWidth = CALENDAR_FRAME_WIDTH;
+  const frameHeight = CALENDAR_FRAME_HEIGHT;
+  const frameSpacing = CALENDAR_FRAME_SPACING;
   const startX = 0;
   const startY = 0;
   
@@ -292,18 +301,24 @@ export function calculateTaskPosition(
   // Calculate vertical position based on time if available
   let verticalOffset = 0;
   if (task.time && task.time.startTime) {
-    const [hours, minutes] = task.time.startTime.split(':').map(Number);
-    const timeInMinutes = hours * 60 + minutes;
-    // Map 9:00-18:00 (540-1080 minutes) to position within cell
-    const workDayStart = 9 * 60; // 9:00
-    const workDayEnd = 18 * 60; // 18:00
-    const workDayRange = workDayEnd - workDayStart;
-    
-    if (timeInMinutes >= workDayStart && timeInMinutes <= workDayEnd) {
-      const normalizedTime = (timeInMinutes - workDayStart) / workDayRange;
-      // Use about 60% of cell height for time-based positioning, leaving room at top for day number
-      const usableHeight = rowHeight * 0.6;
-      verticalOffset = (normalizedTime - 0.5) * usableHeight + 30; // +30 to leave room for day number
+    // Validate time format (HH:MM)
+    const timeMatch = task.time.startTime.match(/^(\d{1,2}):(\d{2})$/);
+    if (timeMatch) {
+      const hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2], 10);
+      
+      if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+        const timeInMinutes = hours * 60 + minutes;
+        
+        // Map work day hours to position within cell
+        if (timeInMinutes >= WORK_DAY_START_MINUTES && timeInMinutes <= WORK_DAY_END_MINUTES) {
+          const workDayRange = WORK_DAY_END_MINUTES - WORK_DAY_START_MINUTES;
+          const normalizedTime = (timeInMinutes - WORK_DAY_START_MINUTES) / workDayRange;
+          // Use about 60% of cell height for time-based positioning, leaving room at top for day number
+          const usableHeight = rowHeight * 0.6;
+          verticalOffset = (normalizedTime - 0.5) * usableHeight + 30; // +30 to leave room for day number
+        }
+      }
     }
   }
   
