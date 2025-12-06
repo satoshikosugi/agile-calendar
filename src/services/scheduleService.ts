@@ -40,7 +40,7 @@ export const getCommonFreeSlots = (
     daySchedules.forEach(s => {
       if (s.type === 'fullDayOff') {
         busyRanges.push({ start: WORKING_START_MIN, end: WORKING_END_MIN });
-      } else if (s.type === 'partial' && s.start && s.end) {
+      } else if ((s.type === 'partial' || s.type === 'nonAgileTask' || s.type === 'personalErrand') && s.start && s.end) {
         busyRanges.push({ start: parseTime(s.start), end: parseTime(s.end) });
       }
     });
@@ -122,14 +122,23 @@ export const getDevEvents = (
         type: 'off',
         color: '#eeeeee'
       });
-    } else if (s.type === 'partial' && s.start && s.end) {
+    } else if ((s.type === 'partial' || s.type === 'nonAgileTask' || s.type === 'personalErrand') && s.start && s.end) {
+      let defaultTitle = '私用';
+      let color = '#f5f5f5'; // Unified Light Gray
+
+      if (s.type === 'nonAgileTask') {
+        defaultTitle = 'アジャイル外';
+      } else if (s.type === 'personalErrand') {
+        defaultTitle = '所用';
+      }
+
       events.push({
         id: `personal-${index}`,
-        title: s.reason || '私用',
+        title: s.reason || defaultTitle,
         start: parseTime(s.start),
         end: parseTime(s.end),
         type: 'personal',
-        color: '#fff3e0'
+        color: color
       });
     }
   });

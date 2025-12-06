@@ -59,6 +59,36 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate })
     });
   };
 
+  const handleAddHoliday = () => {
+    const dateInput = document.getElementById('new-holiday-date') as HTMLInputElement;
+    const reasonInput = document.getElementById('new-holiday-reason') as HTMLInputElement;
+    
+    if (!dateInput.value) return;
+
+    const newHoliday = {
+      date: dateInput.value,
+      reason: reasonInput.value || '非稼働日'
+    };
+
+    onSettingsUpdate({
+      ...settings,
+      projectHolidays: [...(settings.projectHolidays || []), newHoliday].sort((a, b) => a.date.localeCompare(b.date))
+    });
+
+    // Keep inputs for continuous entry
+    // dateInput.value = '';
+    // reasonInput.value = '';
+  };
+
+  const handleRemoveHoliday = (index: number) => {
+    const updatedHolidays = [...(settings.projectHolidays || [])];
+    updatedHolidays.splice(index, 1);
+    onSettingsUpdate({
+      ...settings,
+      projectHolidays: updatedHolidays
+    });
+  };
+
   return (
     <div className="settings-tab">
       <div className="section">
@@ -87,6 +117,30 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate })
           <p className="help-text">
             現在は3ヶ月固定です（基準月-1、基準月、基準月+1）。
           </p>
+        </div>
+
+        <div className="form-group">
+          <label>プロジェクト非稼働日</label>
+          <div className="holiday-input-group">
+            <input type="date" id="new-holiday-date" />
+            <input type="text" id="new-holiday-reason" placeholder="理由 (例: 祝日)" />
+            <button className="btn btn-sm btn-primary" onClick={handleAddHoliday}>追加</button>
+          </div>
+          <div className="holiday-list">
+            {(settings.projectHolidays || []).length === 0 ? (
+              <p className="no-data">設定されていません</p>
+            ) : (
+              <ul>
+                {settings.projectHolidays.map((h, i) => (
+                  <li key={i}>
+                    <span className="holiday-date">{h.date}</span>
+                    <span className="holiday-reason">{h.reason}</span>
+                    <button className="btn-icon-sm" onClick={() => handleRemoveHoliday(i)}>×</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         <div className="form-group">

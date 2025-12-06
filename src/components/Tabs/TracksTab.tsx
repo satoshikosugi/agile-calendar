@@ -563,11 +563,13 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
                       >
                         <option value="fullDayOff">終日休暇</option>
                         <option value="partial">時間休/中抜け</option>
+                        <option value="nonAgileTask">アジャイル以外のタスク</option>
+                        <option value="personalErrand">所用</option>
                       </select>
                     </div>
                   </div>
 
-                  {newSchedule.type === 'partial' && (
+                  {newSchedule.type !== 'fullDayOff' && (
                     <div className="form-row">
                       <div className="form-group">
                         <label>開始時刻:</label>
@@ -632,12 +634,19 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
                         <tr key={index}>
                           <td>{schedule.date}</td>
                           <td>
-                            <span className={`badge ${schedule.type === 'fullDayOff' ? 'badge-danger' : 'badge-warning'}`}>
-                              {schedule.type === 'fullDayOff' ? '終日休暇' : '時間休'}
+                            <span className={`badge ${
+                              schedule.type === 'fullDayOff' ? 'badge-danger' : 
+                              schedule.type === 'nonAgileTask' ? 'badge-info' :
+                              schedule.type === 'personalErrand' ? 'badge-secondary' :
+                              'badge-warning'
+                            }`}>
+                              {schedule.type === 'fullDayOff' ? '終日休暇' : 
+                               schedule.type === 'nonAgileTask' ? 'アジャイル外' :
+                               schedule.type === 'personalErrand' ? '所用' : '時間休'}
                             </span>
                           </td>
                           <td>
-                            {schedule.type === 'partial' ? `${schedule.start} - ${schedule.end}` : '-'}
+                            {schedule.type !== 'fullDayOff' ? `${schedule.start} - ${schedule.end}` : '-'}
                           </td>
                           <td>{schedule.reason}</td>
                           <td>

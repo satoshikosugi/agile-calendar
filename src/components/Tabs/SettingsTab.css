@@ -125,3 +125,64 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
+/* Project Holidays */
+.holiday-input-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.holiday-input-group input[type='date'] {
+  width: 140px;
+}
+
+.holiday-input-group input[type='text'] {
+  flex: 1;
+}
+
+.holiday-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.holiday-list li {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.holiday-list li:last-child {
+  border-bottom: none;
+}
+
+.holiday-date {
+  font-weight: 500;
+  margin-right: 12px;
+  width: 100px;
+}
+
+.holiday-reason {
+  flex: 1;
+  color: #666;
+}
+
+.btn-icon-sm {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+}
+
+.btn-icon-sm:hover {
+  color: #d32f2f;
+}
+

@@ -161,6 +161,12 @@ const Timetable: React.FC<TimetableProps> = ({ date, tasks, settings, selectedTa
       setHoverY(null);
       return;
     }
+
+    // Check if locked
+    if (selectedTask && (selectedTask.constraints?.timeLocked || selectedTask.externalParticipants?.some(p => p.timeFixed))) {
+      setHoverY(null);
+      return;
+    }
     
     // Calculate Y relative to the timetable body
     const rect = e.currentTarget.getBoundingClientRect();
@@ -183,6 +189,11 @@ const Timetable: React.FC<TimetableProps> = ({ date, tasks, settings, selectedTa
 
   const handleBodyClick = () => {
     if (selectedTaskId && onSlotClick && hoverTime && selectedTask) {
+      // Check if locked
+      if (selectedTask.constraints?.timeLocked || selectedTask.externalParticipants?.some(p => p.timeFixed)) {
+        return;
+      }
+
       // Check for conflicts with confirmed participants
       const [h, m] = hoverTime.split(':').map(Number);
       const startMins = h * 60 + m;
@@ -227,7 +238,8 @@ const Timetable: React.FC<TimetableProps> = ({ date, tasks, settings, selectedTa
                 key={group.id} 
                 className="group-header-cell"
                 style={{ 
-                  flex: group.devIds.length,
+                  width: `${group.devIds.length * 70}px`,
+                  flex: 'none',
                   backgroundColor: group.backgroundColor
                 }}
                 onClick={group.onHeaderClick}

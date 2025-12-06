@@ -8,6 +8,10 @@
   position: relative;
 }
 
+.timetable-container * {
+  box-sizing: border-box;
+}
+
 .timetable-header {
   display: flex;
   border-bottom: 1px solid #e0e0e0;
@@ -29,8 +33,8 @@
 }
 
 .dev-column-header {
-  width: 60px; /* Reduced width ~3 full-width chars */
-  min-width: 60px;
+  width: 70px;
+  min-width: 70px;
   padding: 4px;
   text-align: center;
   border-right: 1px solid #e0e0e0;
@@ -84,8 +88,8 @@
 }
 
 .dev-column {
-  width: 60px; /* Match header */
-  min-width: 60px;
+  width: 70px;
+  min-width: 70px;
   position: relative;
   border-right: 1px solid #f0f0f0;
   cursor: pointer;

@@ -21,6 +21,10 @@ const App: React.FC = () => {
   // State for TaskForm navigation
   const [editingTaskId, setEditingTaskId] = useState<string | undefined>(undefined);
   const [taskFormMode, setTaskFormMode] = useState<'create' | 'edit'>('create');
+  const [previousViewMode, setPreviousViewMode] = useState<ViewMode | null>(null);
+  
+  // State for StandupTab persistence
+  const [standupDate, setStandupDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     const init = async () => {
@@ -88,6 +92,8 @@ const App: React.FC = () => {
     } else if (mode === 'settings') {
         width = 800;
         height = 600;
+    } else if (mode === 'standup') {
+        width = 1200; // 1024 * 1.15 ≈ 1178 -> 1200
     }
 
     if (instance && instance.board && instance.board.ui) {
@@ -105,12 +111,14 @@ const App: React.FC = () => {
 
   // Task Navigation Handlers
   const handleCreateTask = () => {
+    setPreviousViewMode(viewMode);
     setTaskFormMode('create');
     setEditingTaskId(undefined);
     setViewMode('task-form');
   };
 
   const handleEditTask = (task: Task) => {
+    setPreviousViewMode(viewMode);
     setTaskFormMode('edit');
     setEditingTaskId(task.id);
     setViewMode('task-form');
@@ -129,9 +137,14 @@ const App: React.FC = () => {
             window.close();
         }
     } else {
-        // Otherwise go back to tasks list
-        setViewMode('tasks');
+        // Otherwise go back to previous view or tasks list
+        if (previousViewMode && previousViewMode !== 'task-form') {
+            setViewMode(previousViewMode);
+        } else {
+            setViewMode('tasks');
+        }
         setEditingTaskId(undefined);
+        setPreviousViewMode(null);
     }
   };
 
@@ -187,7 +200,13 @@ const App: React.FC = () => {
         />
       )}
       {viewMode === 'standup' && (
-        <StandupTab settings={settings} onSettingsUpdate={handleSettingsUpdate} />
+        <StandupTab 
+          settings={settings} 
+          onSettingsUpdate={handleSettingsUpdate} 
+          onEditTask={handleEditTask}
+          currentDate={standupDate}
+          onDateChange={setStandupDate}
+        />
       )}
       {viewMode === 'tracks' && (
         <TracksTab settings={settings} onSettingsUpdate={handleSettingsUpdate} />

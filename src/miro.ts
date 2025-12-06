@@ -391,6 +391,12 @@ const createMockMiro = () => {
         saveMockData(mockData);
         return text;
       },
+      remove: async (item: any) => {
+        if (item && item.id) {
+          delete mockData[item.id];
+          saveMockData(mockData);
+        }
+      },
       ui: {
         on: async () => {},
         openPanel: async () => {},

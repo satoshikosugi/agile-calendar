@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Task, TaskStatus, DevMode, Settings } from '../models/types';
+import { Task, TaskStatus, DevMode, Settings, Dev } from '../models/types';
 import { createTask, updateTask, getTask, deleteTask } from '../services/tasksService';
 import { loadSettings } from '../services/settingsService';
 import { miro } from '../miro';
@@ -136,40 +136,59 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
     }
   };
 
-  const handleDesignerChange = (devId: string, checked: boolean) => {
+  const handleRoleChange = (dev: Dev, checked: boolean) => {
     if (!task) return;
-    const currentDesigners = task.roles.designerIds || [];
-    let newDesigners;
-    if (checked) {
-      newDesigners = [...currentDesigners, devId];
+    
+    const isPm = dev.roleId === 'role-pm';
+    
+    if (isPm) {
+      setTask({
+        ...task,
+        roles: {
+          ...task.roles,
+          pmId: checked ? dev.id : (task.roles.pmId === dev.id ? undefined : task.roles.pmId)
+        }
+      });
     } else {
-      newDesigners = currentDesigners.filter(id => id !== devId);
-    }
-    setTask({
-      ...task,
-      roles: {
-        ...task.roles,
-        designerIds: newDesigners
+      // Treat all non-PM non-Dev roles as Designers (or generic support roles)
+      const currentDesigners = task.roles.designerIds || [];
+      let newDesigners;
+      if (checked) {
+        newDesigners = [...currentDesigners, dev.id];
+      } else {
+        newDesigners = currentDesigners.filter(id => id !== dev.id);
       }
-    });
+      setTask({
+        ...task,
+        roles: {
+          ...task.roles,
+          designerIds: newDesigners
+        }
+      });
+    }
   };
 
   if (loading) return <div>Loading...</div>;
   if (!task || !settings) return <div>Error loading task</div>;
 
-  // Filter devs by role
-  const pmDevs = settings.devs.filter(d => d.roleId === 'role-pm');
-  const designerRole = settings.roles.find(r => r.name === 'Designer');
-  const designerDevs = designerRole 
-    ? settings.devs.filter(d => d.roleId === designerRole.id)
-    : settings.devs.filter(d => d.roleId !== 'role-pm' && d.roleId !== 'role-dev');
+  // Filter devs by role (exclude 'role-dev')
+  const nonDevs = settings.devs.filter(d => d.roleId !== 'role-dev');
+  
+  const getRoleName = (roleId: string | undefined) => {
+    if (!roleId) return 'Unknown';
+    const role = settings.roles.find(r => r.id === roleId);
+    return role ? role.name : 'Unknown';
+  };
 
   const timeOptions = generateTimeOptions();
   const durationOptions = generateDurationOptions();
 
   return (
     <div className="task-form">
-      <h2>{isNew ? '新規タスク作成' : 'タスク編集'}</h2>
+      <div className="task-form-header">
+        <h2>{isNew ? '新規タスク作成' : 'タスク編集'}</h2>
+        <button className="close-btn" onClick={handleClose} title="閉じる">×</button>
+      </div>
       
       <div className="form-group">
         <label>タイトル</label>
@@ -200,8 +219,10 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
             <option value="Done">完了</option>
             <option value="Canceled">中止</option>
           </select>
-        </div>      <div className="form-row">
-        <div className="form-group">
+        </div>
+
+      <div className="time-settings-grid">
+        <div className="grid-item date-item">
             <label>日付</label>
             <input
             type="date"
@@ -209,14 +230,30 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
             onChange={(e) => setTask({ ...task, date: e.target.value })}
             />
         </div>
-        <div className="form-group">
-            <label>開始時刻</label>
+        <div className="grid-item time-item">
+            <div className="label-row">
+                <label>開始時刻</label>
+                {task.time?.startTime && (
+                    <label className="lock-toggle" title="時間を固定">
+                        <input
+                            type="checkbox"
+                            checked={task.constraints.timeLocked}
+                            onChange={(e) => setTask({
+                                ...task,
+                                constraints: { ...task.constraints, timeLocked: e.target.checked }
+                            })}
+                        />
+                        <span>固定</span>
+                    </label>
+                )}
+            </div>
             <select
                 value={task.time?.startTime || ''}
                 onChange={(e) => setTask({ 
                     ...task, 
                     time: { ...task.time, startTime: e.target.value } 
                 })}
+                className={task.constraints.timeLocked ? 'locked-input' : ''}
             >
                 <option value="">未定</option>
                 {timeOptions.map(t => (
@@ -224,7 +261,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
                 ))}
             </select>
         </div>
-        <div className="form-group">
+        <div className="grid-item duration-item">
             <label>所要時間</label>
             <select
                 value={task.time?.duration || ''}
@@ -245,34 +282,24 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
         <h3>ロール割り当て</h3>
         
         <div className="form-group">
-          <label>PM</label>
-          <select
-            value={task.roles.pmId || ''}
-            onChange={(e) => setTask({
-              ...task,
-              roles: { ...task.roles, pmId: e.target.value || undefined }
-            })}
-          >
-            <option value="">未選択</option>
-            {pmDevs.map(dev => (
-              <option key={dev.id} value={dev.id}>{dev.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label>Designers</label>
-          <div className="checkbox-group">
-            {designerDevs.length > 0 ? designerDevs.map(dev => (
-              <label key={dev.id} className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={(task.roles.designerIds || []).includes(dev.id)}
-                  onChange={(e) => handleDesignerChange(dev.id, e.target.checked)}
-                />
-                {dev.name}
-              </label>
-            )) : <p className="no-data">Designer候補がいません</p>}
+          <div className="compact-role-list">
+            {nonDevs.length > 0 ? nonDevs.map(dev => {
+              const isPm = dev.roleId === 'role-pm';
+              const isChecked = isPm 
+                ? task.roles.pmId === dev.id 
+                : (task.roles.designerIds || []).includes(dev.id);
+              
+              return (
+                <label key={dev.id} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={(e) => handleRoleChange(dev, e.target.checked)}
+                  />
+                  {dev.name} <span className="role-badge-small">({getRoleName(dev.roleId)})</span>
+                </label>
+              );
+            }) : <p className="no-data">割り当て可能なメンバーがいません</p>}
           </div>
         </div>
       </div>
@@ -287,7 +314,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
               
               return (
                 <div key={team.id} className="external-team-row">
-                  <label className="checkbox-label">
+                  <label className="checkbox-label team-name-label">
                     <input
                       type="checkbox"
                       checked={isSelected}
@@ -310,41 +337,26 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
                         }
                       }}
                     />
-                    {team.name}
+                    <span>{team.name}</span>
                   </label>
                   
                   {isSelected && (
-                    <div className="external-team-options">
-                      <label className="option-label">
-                        <input
-                          type="checkbox"
-                          checked={participant?.required || false}
-                          onChange={(e) => {
-                            const updated = task.externalParticipants.map(p => 
-                              p.teamId === team.id ? { ...p, required: e.target.checked } : p
-                            );
-                            setTask({ ...task, externalParticipants: updated });
-                          }}
-                        />
-                        必須
-                      </label>
-                      <label className="option-label">
-                        <input
-                          type="checkbox"
-                          checked={participant?.timeFixed || false}
-                          onChange={(e) => {
-                            const updated = task.externalParticipants.map(p => 
-                              p.teamId === team.id ? { ...p, timeFixed: e.target.checked } : p
-                            );
-                            setTask({ ...task, externalParticipants: updated });
-                          }}
-                        />
-                        時間固定
-                      </label>
-                    </div>
+                    <label className="option-label required-label">
+                      <input
+                        type="checkbox"
+                        checked={participant?.required || false}
+                        onChange={(e) => {
+                          const updated = task.externalParticipants.map(p => 
+                            p.teamId === team.id ? { ...p, required: e.target.checked } : p
+                          );
+                          setTask({ ...task, externalParticipants: updated });
+                        }}
+                      />
+                      <span className="small-text">必須</span>
+                    </label>
                   )}
                 </div>
-              );
+              ); 
             }) : <p className="no-data">外部チームが設定されていません</p>}
           </div>
         </div>
@@ -353,50 +365,37 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
       <div className="form-section">
         <h3>開発計画</h3>
         <div className="form-group">
-          <label>開発モード</label>
+          <label>開発リソース</label>
           <select
-            value={task.roles.devPlan.mode}
-            onChange={(e) =>
+            value={`${task.roles.devPlan.mode}:${task.roles.devPlan.mode === 'Tracks' ? task.roles.devPlan.requiredTrackCount : 0}`}
+            onChange={(e) => {
+              const [mode, countStr] = e.target.value.split(':');
               setTask({
                 ...task,
                 roles: {
                   ...task.roles,
                   devPlan: {
                     ...task.roles.devPlan,
-                    mode: e.target.value as DevMode,
+                    mode: mode as DevMode,
+                    requiredTrackCount: parseInt(countStr),
                   },
                 },
-              })
-            }
+              });
+            }}
           >
-            <option value="NoDev">開発なし</option>
-            <option value="Tracks">トラック</option>
-            <option value="AllDev">全開発者</option>
+            <option value="NoDev:0">開発なし</option>
+            {settings.tracks.slice(0, -1).map((_, i) => {
+              const count = i + 1;
+              return (
+                <option key={count} value={`Tracks:${count}`}>
+                  {count} Track{count > 1 ? 's' : ''}
+                </option>
+              );
+            })}
+            <option value="AllDev:0">全開発者</option>
           </select>
         </div>
 
-        {task.roles.devPlan.mode === 'Tracks' && (
-          <div className="form-group">
-            <label>必要トラック数</label>
-            <input
-              type="number"
-              min="0"
-              value={task.roles.devPlan.requiredTrackCount}
-              onChange={(e) =>
-                setTask({
-                  ...task,
-                  roles: {
-                    ...task.roles,
-                    devPlan: {
-                      ...task.roles.devPlan,
-                      requiredTrackCount: parseInt(e.target.value) || 0,
-                    },
-                  },
-                })
-              }
-            />
-          </div>
-        )}
       </div>
 
       <div className="form-actions">

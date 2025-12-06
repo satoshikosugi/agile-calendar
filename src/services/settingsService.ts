@@ -14,6 +14,7 @@ const getDefaultSettings = (): Settings => ({
   devs: [],
   tracks: [],
   externalTeams: [],
+  projectHolidays: [],
   personalSchedules: {},
   dailyTrackAssignments: {},
   dailyAssignmentStatus: {},

@@ -102,7 +102,7 @@ export async function deleteTask(taskId: string): Promise<void> {
     for (const note of stickyNotes) {
       const metadata = await note.getMetadata(TASK_METADATA_KEY);
       if (metadata && (metadata as Task).id === taskId) {
-        await note.remove();
+        await miro.board.remove(note);
         return;
       }
     }

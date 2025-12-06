@@ -3,7 +3,7 @@
 export type TaskStatus = 'Draft' | 'Planned' | 'Scheduled' | 'Done' | 'Canceled';
 export type DevPlanPhase = 'Draft' | 'Phase1Planned' | 'Phase2Fixed';
 export type DevMode = 'NoDev' | 'Tracks' | 'AllDev';
-export type PersonalScheduleType = 'fullDayOff' | 'partial';
+export type PersonalScheduleType = 'fullDayOff' | 'partial' | 'nonAgileTask' | 'personalErrand';
 
 export interface Task {
   id: string;
@@ -65,12 +65,17 @@ export interface ExternalTeam {
   name: string;
 }
 
+export interface ProjectHoliday {
+  date: string; // YYYY-MM-DD
+  reason: string;
+}
+
 export interface PersonalSchedule {
   date: string; // YYYY-MM-DD
   type: PersonalScheduleType;
   reason: string;
-  start?: string; // HH:MM for partial
-  end?: string; // HH:MM for partial
+  start?: string; // HH:MM for partial/others
+  end?: string; // HH:MM for partial/others
 }
 
 export interface DailyTrackAssignment {
@@ -84,6 +89,7 @@ export interface Settings {
   devs: Dev[];
   tracks: Track[];
   externalTeams: ExternalTeam[];
+  projectHolidays: ProjectHoliday[];
   personalSchedules: {
     [devId: string]: PersonalSchedule[];
   };
