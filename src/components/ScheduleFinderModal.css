@@ -1,0 +1,129 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.schedule-finder-modal {
+  background-color: white;
+  border-radius: 8px;
+  width: 800px;
+  max-width: 90%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+}
+
+.modal-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 250px;
+  padding: 20px;
+  border-right: 1px solid #eee;
+  overflow-y: auto;
+  background-color: #f9f9f9;
+}
+
+.main-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.section {
+  margin-bottom: 24px;
+}
+
+.section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.role-group {
+  margin-bottom: 16px;
+}
+
+.role-group h5 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.duration-select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+}
+
+.time-slot-btn {
+  padding: 10px;
+  background-color: #e3f2fd;
+  border: 1px solid #bbdefb;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #1976d2;
+  transition: all 0.2s;
+}
+
+.time-slot-btn:hover {
+  background-color: #bbdefb;
+  transform: translateY(-1px);
+}
+
+.no-slots {
+  text-align: center;
+  color: #666;
+  margin-top: 40px;
+}

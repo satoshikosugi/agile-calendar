@@ -88,6 +88,39 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate })
             現在は3ヶ月固定です（基準月-1、基準月、基準月+1）。
           </p>
         </div>
+
+        <div className="form-group">
+          <label>休憩時間</label>
+          <div className="time-range-inputs">
+            <input
+              type="time"
+              value={settings.breakTime?.startTime || '12:30'}
+              onChange={(e) => onSettingsUpdate({
+                ...settings,
+                breakTime: {
+                  startTime: e.target.value,
+                  duration: settings.breakTime?.duration || 60
+                }
+              })}
+            />
+            <span>から</span>
+            <input
+              type="number"
+              min="0"
+              step="5"
+              value={settings.breakTime?.duration || 60}
+              onChange={(e) => onSettingsUpdate({
+                ...settings,
+                breakTime: {
+                  startTime: settings.breakTime?.startTime || '12:30',
+                  duration: parseInt(e.target.value) || 0
+                }
+              })}
+              style={{ width: '60px' }}
+            />
+            <span>分間</span>
+          </div>
+        </div>
       </div>
 
       <div className="section">

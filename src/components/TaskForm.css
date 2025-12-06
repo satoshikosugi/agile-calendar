@@ -115,3 +115,12 @@
 .btn-danger:hover {
   background-color: #fff0f0;
 }
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}

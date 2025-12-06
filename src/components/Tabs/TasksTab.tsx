@@ -79,7 +79,13 @@ const TasksTab: React.FC<TasksTabProps> = ({ onCreateTask, onEditTask }) => {
                 <div className="task-title">{task.title}</div>
                 <div className="task-meta">
                   <span className={`status-badge status-${task.status.toLowerCase()}`}>
-                    {task.status}
+                    {{
+                      'Draft': '下書き',
+                      'Planned': '計画済',
+                      'Scheduled': '確定済',
+                      'Done': '完了',
+                      'Canceled': '中止'
+                    }[task.status] || task.status}
                   </span>
                   {task.date && <span className="task-date">{task.date}</span>}
                 </div>

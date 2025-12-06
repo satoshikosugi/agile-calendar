@@ -16,6 +16,10 @@ const getDefaultSettings = (): Settings => ({
   externalTeams: [],
   personalSchedules: {},
   dailyTrackAssignments: {},
+  breakTime: {
+    startTime: '12:30',
+    duration: 60
+  }
 });
 
 // Find or create the settings shape (invisible shape to store settings)

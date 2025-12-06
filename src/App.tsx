@@ -5,11 +5,12 @@ import TasksTab from './components/Tabs/TasksTab';
 import CalendarTab from './components/Tabs/CalendarTab';
 import TracksTab from './components/Tabs/TracksTab';
 import SettingsTab from './components/Tabs/SettingsTab';
+import StandupTab from './components/Tabs/StandupTab';
 import TaskForm from './components/TaskForm';
 import { getMiro } from './miro';
 import './App.css';
 
-type ViewMode = 'menu' | 'tasks' | 'calendar' | 'tracks' | 'settings' | 'task-form';
+type ViewMode = 'menu' | 'tasks' | 'calendar' | 'tracks' | 'settings' | 'task-form' | 'standup';
 
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('menu');
@@ -35,7 +36,7 @@ const App: React.FC = () => {
         } else {
             setTaskFormMode('create');
         }
-      } else if (modeParam && ['tasks', 'calendar', 'tracks', 'settings', 'task-form'].includes(modeParam)) {
+      } else if (modeParam && ['tasks', 'calendar', 'tracks', 'settings', 'task-form', 'standup'].includes(modeParam)) {
         setViewMode(modeParam as ViewMode);
       } else {
         setViewMode('menu');
@@ -116,12 +117,6 @@ const App: React.FC = () => {
   };
 
   const handleCloseTaskForm = async () => {
-    // If we are in a modal and came from 'tasks', go back to 'tasks'.
-    // If we opened directly as 'task-form', maybe we should close the modal?
-    // For now, let's assume we always want to go back to 'tasks' if we are in the app flow.
-    // But if the user opened the modal specifically for creating a task (if that's possible), they might want to close.
-    // Given the current structure, 'tasks' is the main view for tasks.
-    
     const params = new URLSearchParams(window.location.search);
     const initialMode = params.get('mode');
     
@@ -158,6 +153,9 @@ const App: React.FC = () => {
           <button className="menu-button" onClick={() => openModal('tasks')}>
             📋 タスク管理
           </button>
+          <button className="menu-button" onClick={() => openModal('standup')}>
+            ⏱️ スタンドアップ
+          </button>
           <button className="menu-button" onClick={() => openModal('tracks')}>
             👥 トラック・メンバー設定
           </button>
@@ -187,6 +185,9 @@ const App: React.FC = () => {
           onCreateTask={handleCreateTask} 
           onEditTask={handleEditTask} 
         />
+      )}
+      {viewMode === 'standup' && (
+        <StandupTab settings={settings} onSettingsUpdate={handleSettingsUpdate} />
       )}
       {viewMode === 'tracks' && (
         <TracksTab settings={settings} onSettingsUpdate={handleSettingsUpdate} />

@@ -90,4 +90,8 @@ export interface Settings {
   dailyTrackAssignments: {
     [date: string]: DailyTrackAssignment;
   };
+  breakTime?: {
+    startTime: string; // HH:MM
+    duration: number; // minutes
+  };
 }
