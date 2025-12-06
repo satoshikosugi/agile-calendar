@@ -1,0 +1,342 @@
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  height: 100vh;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background-color: #fff;
+}
+
+.task-form h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #444;
+}
+
+.form-group input[type="text"],
+.form-group input[type="url"],
+.form-group input[type="date"],
+.form-group input[type="number"],
+.form-group textarea,
+.form-group select {
+  padding: 10px 12px;
+  border: 1px solid #d1d1d1;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: #1a1a1a;
+  background-color: #fff;
+  transition: all 0.2s ease-in-out;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  border-color: #4262ff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(66, 98, 255, 0.1);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 24px;
+  border-top: 1px solid #e5e5e5;
+  justify-content: flex-end;
+}
+
+/* Button overrides to ensure they look good in the modal */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  height: 40px;
+}
+
+.btn-primary {
+  background-color: #4262ff;
+  color: white;
+  border-color: #4262ff;
+}
+
+.btn-primary:hover {
+  background-color: #3549cc;
+  border-color: #3549cc;
+}
+
+.btn-secondary {
+  background-color: #fff;
+  color: #1a1a1a;
+  border-color: #d1d1d1;
+}
+
+.btn-secondary:hover {
+  background-color: #f5f5f5;
+  border-color: #b3b3b3;
+}
+
+.btn-danger {
+  background-color: #fff;
+  color: #d93025;
+  border-color: #d93025;
+}
+
+.btn-danger:hover {
+  background-color: #fff0f0;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.time-settings-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end; /* Align inputs to bottom */
+}
+
+.date-group {
+  width: 140px;
+  flex: 0 0 auto;
+}
+
+.time-group {
+  width: 120px;
+  flex: 0 0 auto;
+}
+
+.duration-group {
+  width: 120px;
+  flex: 0 0 auto;
+}
+
+.date-group input,
+.time-group select,
+.duration-group select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.label-with-lock {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px; /* Match form-group gap */
+  min-height: 20px;
+}
+
+.time-lock-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #555;
+  cursor: pointer;
+  background-color: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.time-lock-toggle:hover {
+  background-color: #e8e8e8;
+}
+
+.time-lock-toggle input {
+  margin: 0;
+  width: 12px;
+  height: 12px;
+}
+
+.locked-input {
+  background-color: #fffde7 !important;
+  border-color: #fbc02d !important;
+}
+
+.external-team-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 6px 0;
+  border: none;
+  margin-bottom: 0;
+  background-color: transparent;
+}
+
+.external-team-row:hover {
+  background-color: transparent;
+}
+
+.team-name-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.required-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: #666;
+  font-size: 0.9em;
+  margin: 0;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.small-text {
+  font-size: 0.85em;
+}
+
+
+/* Compact Role List */
+.compact-role-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.compact-role-list .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 10px;
+  background-color: #f9f9f9;
+  border-radius: 16px;
+  border: 1px solid #e0e0e0;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.compact-role-list .checkbox-label:hover {
+  background-color: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+.compact-role-list input[type='checkbox'] {
+  margin: 0;
+}
+
+.role-badge-small {
+  font-size: 0.85em;
+  color: #666;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.task-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e5e5e5;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.task-form-header h2 {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: #666;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.close-btn:hover {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.time-settings-grid {
+  display: grid;
+  grid-template-columns: 140px 120px 100px;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 20px;
+}
+
+.grid-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 20px;
+}
+
+.lock-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #555;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.lock-toggle input {
+  margin: 0;
+}
+
+.locked-input {
+  background-color: #fffde7 !important;
+  border-color: #fbc02d !important;
+}
+
