@@ -74,6 +74,22 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
     return settings.dailyTrackAssignments[selectedDate] || {};
   };
 
+  const getAssignmentStatus = (): 'confirmed' | 'unconfirmed' => {
+    return settings.dailyAssignmentStatus?.[selectedDate] || 'unconfirmed';
+  };
+
+  const toggleAssignmentStatus = () => {
+    const currentStatus = getAssignmentStatus();
+    const newStatus = currentStatus === 'confirmed' ? 'unconfirmed' : 'confirmed';
+    onSettingsUpdate({
+      ...settings,
+      dailyAssignmentStatus: {
+        ...settings.dailyAssignmentStatus,
+        [selectedDate]: newStatus
+      }
+    });
+  };
+
   const getAssignedDevIds = (): Set<string> => {
     const assignment = getCurrentAssignment();
     const ids = new Set<string>();
@@ -354,7 +370,11 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
   const absentDevIds = new Set(currentAssignment['absent'] || []);
   
   // Only show Devs in the assignment view
-  const assignableDevs = settings.devs.filter(dev => dev.roleId === 'role-dev');
+  const assignableDevs = settings.devs.filter(dev => {
+    const role = settings.roles.find(r => r.id === dev.roleId);
+    // Filter by role name 'Dev' or ID 'role-dev'
+    return role && (role.name === 'Dev' || role.id === 'role-dev');
+  });
   
   const unassignedDevs = assignableDevs.filter(dev => !assignedDevIds.has(dev.id) && !absentDevIds.has(dev.id));
   const absentDevs = assignableDevs.filter(dev => absentDevIds.has(dev.id));
@@ -406,6 +426,12 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
                 <input type="date" value={selectedDate} onChange={handleDateChange} />
               </div>
               <div className="assignment-actions">
+                <button 
+                  className={`btn ${getAssignmentStatus() === 'confirmed' ? 'btn-success' : 'btn-outline-secondary'}`}
+                  onClick={toggleAssignmentStatus}
+                >
+                  {getAssignmentStatus() === 'confirmed' ? '確定済' : '未確定'}
+                </button>
                 <button className="btn btn-secondary" onClick={handleCopyPrevious}>前日をコピー</button>
                 <button className="btn btn-primary" onClick={handleAutoAssign}>自動アサイン</button>
                 <button className="btn btn-danger" onClick={handleClearAssignment}>クリア</button>

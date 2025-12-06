@@ -72,6 +72,10 @@ export const generateAutoAssignment = (
   const availableDevs = settings.devs.filter(dev => {
     if (assignedDevIds.has(dev.id)) return false;
     if (absentDevIds.has(dev.id)) return false;
+
+    // Role check: Only assign Devs
+    const role = settings.roles.find(r => r.id === dev.roleId);
+    if (!role || (role.name !== 'Dev' && role.id !== 'role-dev')) return false;
     
     // 休暇チェック (personalSchedules)
     const schedules = settings.personalSchedules[dev.id] || [];

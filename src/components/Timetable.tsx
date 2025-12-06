@@ -3,6 +3,14 @@ import { Settings, Task } from '../models/types';
 import { getDevEvents, WORKING_START_MIN, WORKING_END_MIN, formatTime, parseTime } from '../services/scheduleService';
 import './Timetable.css';
 
+export interface TimetableColumnGroup {
+  id: string;
+  title: string;
+  devIds: string[];
+  onHeaderClick?: () => void;
+  backgroundColor?: string;
+}
+
 interface TimetableProps {
   date: string;
   tasks: Task[];
@@ -11,23 +19,41 @@ interface TimetableProps {
   onSlotClick?: (startTime: string) => void;
   onEventClick?: (taskId: string) => void;
   onHeaderClick?: (devId: string) => void;
+  columnGroups?: TimetableColumnGroup[]; // Optional grouping for confirmed view
 }
 
-const Timetable: React.FC<TimetableProps> = ({ date, tasks, settings, selectedTaskId, onSlotClick, onEventClick, onHeaderClick }) => {
+const Timetable: React.FC<TimetableProps> = ({ date, tasks, settings, selectedTaskId, onSlotClick, onEventClick, onHeaderClick, columnGroups }) => {
   const totalMinutes = WORKING_END_MIN - WORKING_START_MIN;
   const [hoverY, setHoverY] = React.useState<number | null>(null);
   const [hoverTime, setHoverTime] = React.useState<string | null>(null);
   const [tooltip, setTooltip] = React.useState<{ x: number, y: number, content: React.ReactNode } | null>(null);
   
-  // Group devs by role
+  // Determine columns to render
+  let columns: { devId: string, groupId?: string }[] = [];
+  
+  // Helper to get devs by role (used in both branches)
   const pmDevs = settings.devs.filter(d => d.roleId === 'role-pm');
   const designerRole = settings.roles.find(r => r.name.toLowerCase() === 'designer' || r.name === 'デザイナー');
   const designerDevs = designerRole 
     ? settings.devs.filter(d => d.roleId === designerRole.id)
     : [];
   const otherDevs = settings.devs.filter(d => !pmDevs.includes(d) && !designerDevs.includes(d));
-  
-  const allDevs = [...pmDevs, ...designerDevs, ...otherDevs];
+
+  if (columnGroups) {
+    // Render based on groups
+    columnGroups.forEach(group => {
+      group.devIds.forEach(devId => {
+        columns.push({ devId, groupId: group.id });
+      });
+    });
+  } else {
+    // Default rendering (PM -> Designer -> Devs)
+    [...pmDevs, ...designerDevs, ...otherDevs].forEach(dev => {
+      columns.push({ devId: dev.id });
+    });
+  }
+
+  const allDevs = columns.map(c => settings.devs.find(d => d.id === c.devId)).filter(Boolean) as typeof settings.devs;
 
   // Determine highlighted devs based on selected task
   const selectedTask = selectedTaskId ? tasks.find(t => t.id === selectedTaskId) : null;
@@ -42,10 +68,25 @@ const Timetable: React.FC<TimetableProps> = ({ date, tasks, settings, selectedTa
     selectedTask.roles.designerIds?.forEach(id => confirmedDevIds.add(id));
     
     // Devs
-    if (selectedTask.roles.devPlan.mode === 'AllDev' || selectedTask.roles.devPlan.mode === 'Tracks') {
-      // All devs (excluding PM if they are dev role, but usually we just add all devs)
-      // Assuming 'Dev' role or similar. For simplicity, add all non-PM/Designer devs
+    if (selectedTask.roles.devPlan.mode === 'AllDev') {
+      // All devs
       otherDevs.forEach(d => confirmedDevIds.add(d.id));
+    } else if (selectedTask.roles.devPlan.mode === 'Tracks') {
+      // Assigned tracks
+      const assignedTrackIds = selectedTask.roles.devPlan.assignedTrackIds || [];
+      const requiredCount = selectedTask.roles.devPlan.requiredTrackCount || 0;
+      
+      // If assignment is complete, only highlight assigned track members
+      if (assignedTrackIds.length >= requiredCount && requiredCount > 0) {
+        const assignment = settings.dailyTrackAssignments[date] || {};
+        assignedTrackIds.forEach(trackId => {
+          const devIds = assignment[trackId] || [];
+          devIds.forEach(id => confirmedDevIds.add(id));
+        });
+      } else {
+        // If incomplete, highlight ALL devs (draft state)
+        otherDevs.forEach(d => confirmedDevIds.add(d.id));
+      }
     }
   }
 
@@ -175,26 +216,53 @@ const Timetable: React.FC<TimetableProps> = ({ date, tasks, settings, selectedTa
 
   return (
     <div className="timetable-container">
-      <div className="timetable-header">
-        <div className="time-column-header"></div>
-        <div className="summary-column-header"></div>
-        {allDevs.map(dev => {
-          let headerClass = "dev-column-header";
-          if (confirmedDevIds.has(dev.id)) headerClass += " header-highlight-confirmed";
-          else if (candidateDevIds.has(dev.id)) headerClass += " header-highlight-candidate";
+      <div className="timetable-header-wrapper">
+        {/* Group Header Row (Optional) */}
+        {columnGroups && (
+          <div className="timetable-group-header">
+            <div className="time-column-header"></div>
+            <div className="summary-column-header"></div>
+            {columnGroups.map(group => (
+              <div 
+                key={group.id} 
+                className="group-header-cell"
+                style={{ 
+                  flex: group.devIds.length,
+                  backgroundColor: group.backgroundColor
+                }}
+                onClick={group.onHeaderClick}
+              >
+                {group.title}
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {/* Dev Header Row */}
+        <div className="timetable-header">
+          <div className="time-column-header"></div>
+          <div className="summary-column-header"></div>
+          {columns.map((col, index) => {
+            const dev = settings.devs.find(d => d.id === col.devId);
+            if (!dev) return null;
 
-          return (
-            <div 
-              key={dev.id} 
-              className={headerClass}
-              onClick={() => onHeaderClick && onHeaderClick(dev.id)}
-              style={{ cursor: onHeaderClick ? 'pointer' : 'default' }}
-            >
-              <div className="dev-name">{dev.name}</div>
-              <div className="dev-role">{settings.roles.find(r => r.id === dev.roleId)?.name || 'Dev'}</div>
-            </div>
-          );
-        })}
+            let headerClass = "dev-column-header";
+            if (confirmedDevIds.has(dev.id)) headerClass += " header-highlight-confirmed";
+            else if (candidateDevIds.has(dev.id)) headerClass += " header-highlight-candidate";
+
+            return (
+              <div 
+                key={`${dev.id}-${index}`} 
+                className={headerClass}
+                onClick={() => onHeaderClick && onHeaderClick(dev.id)}
+                style={{ cursor: onHeaderClick ? 'pointer' : 'default' }}
+              >
+                <div className="dev-name">{dev.name}</div>
+                <div className="dev-role">{settings.roles.find(r => r.id === dev.roleId)?.name || 'Dev'}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
       
       <div 

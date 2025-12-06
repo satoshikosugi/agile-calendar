@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Task, Settings, DevMode } from '../../models/types';
 import { loadTasks, updateTask } from '../../services/tasksService';
 import { WORKING_START_MIN, WORKING_END_MIN, parseTime, formatTime, getDevEvents } from '../../services/scheduleService';
-import Timetable from '../Timetable';
+import Timetable, { TimetableColumnGroup } from '../Timetable';
 import './StandupTab.css';
 
 interface StandupTabProps {
@@ -321,10 +321,103 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings }) => {
     }
   };
 
+  const handleTrackHeaderClick = (trackId: string) => {
+    if (!selectedTaskId) return;
+    const task = tasks.find(t => t.id === selectedTaskId);
+    if (!task) return;
+
+    if (task.roles.devPlan.mode !== 'Tracks') return;
+
+    const currentTracks = task.roles.devPlan.assignedTrackIds || [];
+    const requiredCount = task.roles.devPlan.requiredTrackCount || 0;
+    
+    let newTracks;
+    if (currentTracks.includes(trackId)) {
+      // Remove
+      newTracks = currentTracks.filter(id => id !== trackId);
+    } else {
+      // Add (if limit not reached)
+      if (currentTracks.length < requiredCount) {
+        newTracks = [...currentTracks, trackId];
+      } else {
+        // Limit reached, do nothing
+        return;
+      }
+    }
+    
+    handleDevPlanUpdate(task.id, { assignedTrackIds: newTracks });
+  };
+
   const filteredTasks = getFilteredTasks();
   const pmDev = settings.devs.find(d => d.roleId === 'role-pm');
   const timeOptions = generateTimeOptions();
   const durationOptions = generateDurationOptions();
+
+  // Prepare Timetable Props
+  const isAssignmentConfirmed = settings.dailyAssignmentStatus?.[filterDate] === 'confirmed';
+  let columnGroups: TimetableColumnGroup[] | undefined;
+
+  if (isAssignmentConfirmed) {
+    const assignment = settings.dailyTrackAssignments[filterDate] || {};
+    const activeTracks = settings.tracks.filter(t => t.active);
+    
+    // PM Group
+    const pmDevs = settings.devs.filter(d => d.roleId === 'role-pm');
+    const designerRole = settings.roles.find(r => r.name.toLowerCase() === 'designer' || r.name === 'デザイナー');
+    const designerDevs = designerRole ? settings.devs.filter(d => d.roleId === designerRole.id) : [];
+    
+    columnGroups = [];
+    
+    if (pmDevs.length > 0) {
+      columnGroups.push({
+        id: 'pm',
+        title: '',
+        devIds: pmDevs.map(d => d.id)
+      });
+    }
+    
+    if (designerDevs.length > 0) {
+      columnGroups.push({
+        id: 'designer',
+        title: '',
+        devIds: designerDevs.map(d => d.id)
+      });
+    }
+
+    // Track Groups
+    const selectedTask = selectedTaskId ? tasks.find(t => t.id === selectedTaskId) : null;
+
+    activeTracks.forEach(track => {
+      const devIds = assignment[track.id] || [];
+      if (devIds.length > 0) {
+        let backgroundColor = undefined;
+        
+        if (selectedTask && selectedTask.roles.devPlan.mode === 'Tracks') {
+            const assignedIds = selectedTask.roles.devPlan.assignedTrackIds || [];
+            const required = selectedTask.roles.devPlan.requiredTrackCount || 0;
+            const isAssigned = assignedIds.includes(track.id);
+            
+            if (isAssigned) {
+                backgroundColor = '#ffb74d'; // Orange
+            } else {
+                if (assignedIds.length < required) {
+                    backgroundColor = '#fff59d'; // Light Yellow
+                } else {
+                    backgroundColor = '#ffffff'; // White
+                }
+            }
+        }
+
+        columnGroups!.push({
+          id: track.id,
+          title: track.name,
+          devIds: devIds,
+          onHeaderClick: () => handleTrackHeaderClick(track.id),
+          backgroundColor
+        });
+      }
+    });
+  }
 
   if (loading) return <div>Loading...</div>;
 
@@ -472,6 +565,7 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings }) => {
             onSlotClick={handleTimetableSlotClick}
             onEventClick={(taskId) => setSelectedTaskId(taskId)}
             onHeaderClick={handleTimetableHeaderClick}
+            columnGroups={columnGroups}
           />
         </div>
       </div>

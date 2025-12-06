@@ -294,3 +294,37 @@
   border-top-right-radius: 4px;
   pointer-events: none;
 }
+
+.timetable-header-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-color: #f9f9f9;
+  width: fit-content;
+}
+
+.timetable-group-header {
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #f0f0f0;
+}
+
+.group-header-cell {
+  text-align: center;
+  font-weight: bold;
+  font-size: 12px;
+  padding: 4px;
+  border-right: 1px solid #e0e0e0;
+  background-color: #e9ecef;
+  cursor: pointer;
+}
+
+.group-header-cell:hover {
+  background-color: #dee2e6;
+}
+
+/* Adjust existing header to not be sticky itself, as wrapper handles it */
+.timetable-header {
+  position: static;
+}
+

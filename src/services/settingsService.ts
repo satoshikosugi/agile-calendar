@@ -16,6 +16,7 @@ const getDefaultSettings = (): Settings => ({
   externalTeams: [],
   personalSchedules: {},
   dailyTrackAssignments: {},
+  dailyAssignmentStatus: {},
   breakTime: {
     startTime: '12:30',
     duration: 60

@@ -157,12 +157,34 @@ export const getDevEvents = (
 
         if (dev && dev.roleId !== 'role-pm' && !isDesigner) isAssigned = true;
       } else if (task.roles.devPlan.mode === 'Tracks') {
-        // Tracks mode also involves all devs (visually and for conflict)
         const dev = settings.devs.find(d => d.id === devId);
         const designerRole = settings.roles.find(r => r.name.toLowerCase() === 'designer' || r.name === 'デザイナー');
         const isDesigner = designerRole && dev?.roleId === designerRole.id;
+        const isDev = dev && dev.roleId !== 'role-pm' && !isDesigner;
 
-        if (dev && dev.roleId !== 'role-pm' && !isDesigner) isAssigned = true;
+        if (isDev) {
+          const assignedTrackIds = task.roles.devPlan.assignedTrackIds || [];
+          const requiredCount = task.roles.devPlan.requiredTrackCount || 0;
+          
+          // If assignment is complete (assigned tracks >= required), only show for assigned track members
+          if (assignedTrackIds.length >= requiredCount && requiredCount > 0) {
+            const assignment = settings.dailyTrackAssignments[date] || {};
+            let isTrackMember = false;
+            
+            for (const trackId of assignedTrackIds) {
+              const trackDevs = assignment[trackId] || [];
+              if (trackDevs.includes(devId)) {
+                isTrackMember = true;
+                break;
+              }
+            }
+            
+            if (isTrackMember) isAssigned = true;
+          } else {
+            // If assignment is incomplete, show for ALL devs (draft state)
+            isAssigned = true;
+          }
+        }
       }
     }
 

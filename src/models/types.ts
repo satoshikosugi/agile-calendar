@@ -90,6 +90,9 @@ export interface Settings {
   dailyTrackAssignments: {
     [date: string]: DailyTrackAssignment;
   };
+  dailyAssignmentStatus?: {
+    [date: string]: 'confirmed' | 'unconfirmed';
+  };
   breakTime?: {
     startTime: string; // HH:MM
     duration: number; // minutes
