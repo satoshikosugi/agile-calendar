@@ -3,18 +3,19 @@
 
 // Initialize Miro SDK
 let miroInstance: any = null;
-let initializationPromise: Promise<any> | null = null;
+let initializationPromise: Promise<void> | null = null;
 
 const initializeMiro = async () => {
   if (initializationPromise) {
     return initializationPromise;
   }
 
-  initializationPromise = new Promise(async (resolve) => {
+  initializationPromise = new Promise<void>(async (resolve) => {
     // Check if we're in Miro environment
     if (typeof window === 'undefined') {
       console.warn('⚠️ Running in development mode without Miro SDK. Using mock data.');
-      resolve(createMockMiro());
+      miroInstance = createMockMiro();
+      resolve();
       return;
     }
 
@@ -22,30 +23,43 @@ const initializeMiro = async () => {
     
     if (!windowMiro) {
       console.warn('⚠️ Miro SDK not found. Using mock data.');
-      resolve(createMockMiro());
+      miroInstance = createMockMiro();
+      resolve();
       return;
     }
 
     // Try to initialize SDK by calling board.getInfo() as a health check
     try {
       console.log('✅ Miro SDK detected, attempting to connect...');
+      // Avoid logging proxy objects directly as it can cause issues with SDK
+      // console.log('SDK object:', windowMiro);
+      // console.log('SDK board:', windowMiro?.board);
       
-      // Test if SDK is actually connected with a timeout
+      // Test if SDK is actually connected with a longer timeout (10 seconds)
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('SDK connection timeout')), 3000)
+        setTimeout(() => reject(new Error('SDK connection timeout after 10s')), 10000)
       );
       
-      await Promise.race([
+      const boardInfo = await Promise.race([
         windowMiro.board.getInfo(),
         timeoutPromise
       ]);
       
       console.log('✅ Miro SDK connected successfully');
-      resolve(windowMiro);
+      console.log('Board info:', boardInfo);
+      miroInstance = windowMiro;
+      resolve();
     } catch (error) {
       console.error('❌ Miro SDK connection failed:', error);
+      console.error('Error details:', {
+        name: (error as Error).name,
+        message: (error as Error).message,
+        stack: (error as Error).stack
+      });
       console.warn('⚠️ Falling back to mock mode - app will work with local storage');
-      resolve(createMockMiro());
+      console.warn('⚠️ Note: In mock mode, calendar will NOT be drawn on the actual Miro board');
+      miroInstance = createMockMiro();
+      resolve();
     }
   });
 
@@ -407,9 +421,11 @@ const createMockMiro = () => {
 // Use mock in development, real SDK in Miro environment
 export const getMiro = async () => {
   if (!miroInstance) {
-    miroInstance = await initializeMiro();
+    await initializeMiro();
   }
-  return miroInstance;
+  // Return a wrapper object to avoid "thenable" check on the Proxy object
+  // which causes SdkMethodExecutionError in Miro environment when returned from async function
+  return { instance: miroInstance };
 };
 
 // Legacy export for backward compatibility (will use mock if not initialized)

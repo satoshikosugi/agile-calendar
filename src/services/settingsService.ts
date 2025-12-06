@@ -1,7 +1,6 @@
 import { Settings } from '../models/types';
 import { miro } from '../miro';
 
-const SETTINGS_TAG = 'agile-calendar-settings';
 const SETTINGS_KEY = 'settings';
 
 // Default settings
@@ -18,16 +17,35 @@ const getDefaultSettings = (): Settings => ({
 // Find or create the settings shape (invisible shape to store settings)
 async function getSettingsShape() {
   try {
+    console.log('Searching for settings shape...');
     const shapes = await miro.board.get({ type: 'shape' });
-    const settingsShape = shapes.find((s: any) => s.tags?.includes(SETTINGS_TAG));
+    console.log(`Found ${shapes.length} shapes`);
+    
+    let settingsShape = null;
+    for (const s of shapes) {
+      try {
+        // Check if getMetadata exists before calling it
+        if (typeof s.getMetadata === 'function') {
+          const appType = await s.getMetadata('appType');
+          if (appType === 'settings') {
+            settingsShape = s;
+            break;
+          }
+        }
+      } catch (e) {
+        console.warn('Error checking shape metadata:', e);
+      }
+    }
     
     if (settingsShape) {
+      console.log('Settings shape found');
       return settingsShape;
     }
   } catch (error) {
     console.warn('Error finding settings shape:', error);
   }
   
+  console.log('Creating new settings shape...');
   // Create a new invisible shape to store settings
   const shape = await miro.board.createShape({
     shape: 'rectangle',
@@ -41,13 +59,14 @@ async function getSettingsShape() {
     },
   });
   
-  await shape.setMetadata(SETTINGS_KEY, getDefaultSettings());
-  await shape.sync();
-  
-  // Tag it for easy finding
-  const currentTags = shape.tags || [];
-  shape.tags = [...currentTags, SETTINGS_TAG];
-  await shape.sync();
+  try {
+    await shape.setMetadata(SETTINGS_KEY, getDefaultSettings());
+    await shape.setMetadata('appType', 'settings');
+    await shape.sync();
+    console.log('Settings shape created');
+  } catch (e) {
+    console.error('Error initializing settings shape:', e);
+  }
   
   return shape;
 }

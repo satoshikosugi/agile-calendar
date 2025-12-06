@@ -1,7 +1,5 @@
 import { miro } from '../miro';
-import { Settings } from '../models/types';
-
-const CALENDAR_FRAME_TAG = 'agile-calendar-frame';
+import { Settings, Task } from '../models/types';
 
 // Generate 3-month calendar frames on the board
 export async function generateCalendar(settings: Settings): Promise<void> {
@@ -46,11 +44,6 @@ export async function generateCalendar(settings: Settings): Promise<void> {
           fillColor: '#f5f5f5',
         },
       });
-      
-      // Tag it as calendar frame
-      const currentTags = frame.tags || [];
-      frame.tags = [...currentTags, CALENDAR_FRAME_TAG];
-      await frame.sync();
       
       // Add basic calendar structure within the frame
       await createCalendarGrid(frame, monthDate, settings);
@@ -122,7 +115,7 @@ async function createCalendarGrid(
 
 // Move viewport to a specific month's calendar frame
 export async function moveToMonth(yearMonth: string): Promise<void> {
-  const frames = await miro.board.get({ type: 'frame', tags: [CALENDAR_FRAME_TAG] });
+  const frames = await miro.board.get({ type: 'frame' });
   const targetFrame = frames.find((frame: any) => frame.title === `Calendar ${yearMonth}`);
   
   if (targetFrame) {
@@ -158,4 +151,57 @@ export async function navigateToNextMonth(settings: Settings): Promise<Settings>
   await moveToMonth(newSettings.baseMonth);
   
   return newSettings;
+}
+
+// Calculate position for a task on the calendar
+export function calculateTaskPosition(task: Task, settings: Settings): { x: number, y: number } {
+  if (!task.date) return { x: 0, y: 0 };
+
+  const taskDate = new Date(task.date);
+  const baseDate = new Date(settings.baseMonth + '-01');
+  
+  // Calculate month difference
+  const diffYear = taskDate.getFullYear() - baseDate.getFullYear();
+  const diffMonth = diffYear * 12 + taskDate.getMonth() - baseDate.getMonth();
+  
+  // Frame constants (must match generateCalendar)
+  const frameWidth = 2000;
+  const frameHeight = 1500;
+  const frameSpacing = 200;
+  const startX = 0;
+  const startY = 0;
+  
+  const frameX = startX + diffMonth * (frameWidth + frameSpacing);
+  const frameY = startY;
+  
+  // Calculate column (day)
+  const daysInMonth = new Date(taskDate.getFullYear(), taskDate.getMonth() + 1, 0).getDate();
+  const colWidth = frameWidth / daysInMonth;
+  const day = taskDate.getDate();
+  const x = frameX - frameWidth / 2 + colWidth * (day - 0.5);
+  
+  // Calculate row
+  let rowIndex = 0; // Default to PM
+  
+  const activeTracks = settings.tracks.filter(t => t.active);
+  
+  if (task.roles.devPlan.assignedTrackIds.length > 0) {
+    // Find the index of the first assigned track
+    const trackId = task.roles.devPlan.assignedTrackIds[0];
+    const trackIndex = activeTracks.findIndex(t => t.id === trackId);
+    if (trackIndex !== -1) {
+      rowIndex = 2 + trackIndex; // 0: PM, 1: Designer, 2+: Tracks
+    }
+  } else if (task.roles.designerIds.length > 0) {
+    rowIndex = 1;
+  } else if (task.roles.pmId) {
+    rowIndex = 0;
+  }
+  
+  const headerHeight = 100;
+  const rowHeight = (frameHeight - headerHeight) / (activeTracks.length + 3);
+  
+  const y = frameY - frameHeight / 2 + headerHeight + rowHeight * (rowIndex + 0.5);
+  
+  return { x, y };
 }

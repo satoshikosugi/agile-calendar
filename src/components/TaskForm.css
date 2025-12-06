@@ -1,0 +1,117 @@
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  height: 100vh;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background-color: #fff;
+}
+
+.task-form h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #444;
+}
+
+.form-group input[type="text"],
+.form-group input[type="url"],
+.form-group input[type="date"],
+.form-group input[type="number"],
+.form-group textarea,
+.form-group select {
+  padding: 10px 12px;
+  border: 1px solid #d1d1d1;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: #1a1a1a;
+  background-color: #fff;
+  transition: all 0.2s ease-in-out;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  border-color: #4262ff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(66, 98, 255, 0.1);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 24px;
+  border-top: 1px solid #e5e5e5;
+  justify-content: flex-end;
+}
+
+/* Button overrides to ensure they look good in the modal */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  height: 40px;
+}
+
+.btn-primary {
+  background-color: #4262ff;
+  color: white;
+  border-color: #4262ff;
+}
+
+.btn-primary:hover {
+  background-color: #3549cc;
+  border-color: #3549cc;
+}
+
+.btn-secondary {
+  background-color: #fff;
+  color: #1a1a1a;
+  border-color: #d1d1d1;
+}
+
+.btn-secondary:hover {
+  background-color: #f5f5f5;
+  border-color: #b3b3b3;
+}
+
+.btn-danger {
+  background-color: #fff;
+  color: #d93025;
+  border-color: #d93025;
+}
+
+.btn-danger:hover {
+  background-color: #fff0f0;
+}

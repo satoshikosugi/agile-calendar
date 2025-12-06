@@ -1,25 +1,29 @@
 import { Task } from '../models/types';
 import { miro } from '../miro';
+import { loadSettings } from './settingsService';
+import { calculateTaskPosition } from './calendarLayoutService';
 
-const TASK_TAG = 'agile-calendar-task';
 const TASK_METADATA_KEY = 'task';
 
 // Create a new task as a sticky note on the board
 export async function createTask(task: Task): Promise<Task> {
   try {
+    // Calculate position based on date and settings
+    const settings = await loadSettings();
+    const position = calculateTaskPosition(task, settings);
+
     const stickyNote = await miro.board.createStickyNote({
       content: task.title,
-      x: 0,
-      y: 0,
+      x: position.x,
+      y: position.y,
       width: 200,
     });
     
-    await stickyNote.setMetadata(TASK_METADATA_KEY, task);
-    await stickyNote.sync();
+    await stickyNote.setMetadata('appType', 'task');
     
-    // Tag it for easy finding
-    const currentTags = stickyNote.tags || [];
-    stickyNote.tags = [...currentTags, TASK_TAG];
+    // Sanitize task object to remove undefined values which Miro SDK doesn't like
+    const cleanTask = JSON.parse(JSON.stringify(task));
+    await stickyNote.setMetadata(TASK_METADATA_KEY, cleanTask);
     await stickyNote.sync();
     
     return task;
@@ -32,13 +36,22 @@ export async function createTask(task: Task): Promise<Task> {
 // Load all tasks from the board
 export async function loadTasks(): Promise<Task[]> {
   try {
-    const stickyNotes = await miro.board.get({ type: 'sticky_note', tags: [TASK_TAG] });
+    const stickyNotes = await miro.board.get({ type: 'sticky_note' });
     const tasks: Task[] = [];
     
     for (const note of stickyNotes) {
-      const metadata = await note.getMetadata(TASK_METADATA_KEY);
-      if (metadata) {
-        tasks.push(metadata as Task);
+      const appType = await note.getMetadata('appType');
+      if (appType === 'task') {
+        const metadata = await note.getMetadata(TASK_METADATA_KEY);
+        if (metadata) {
+          tasks.push(metadata as Task);
+        }
+      } else {
+        // Fallback for backward compatibility or if appType wasn't set but TASK_METADATA_KEY exists
+        const metadata = await note.getMetadata(TASK_METADATA_KEY);
+        if (metadata) {
+           tasks.push(metadata as Task);
+        }
       }
     }
     
@@ -52,14 +65,23 @@ export async function loadTasks(): Promise<Task[]> {
 // Update an existing task
 export async function updateTask(task: Task): Promise<void> {
   try {
-    const stickyNotes = await miro.board.get({ type: 'sticky_note', tags: [TASK_TAG] });
+    const stickyNotes = await miro.board.get({ type: 'sticky_note' });
     
     for (const note of stickyNotes) {
       const metadata = await note.getMetadata(TASK_METADATA_KEY);
       if (metadata && (metadata as Task).id === task.id) {
         // Update sticky note content
         note.content = task.title;
-        await note.setMetadata(TASK_METADATA_KEY, task);
+        
+        // Update position if date changed
+        const settings = await loadSettings();
+        const position = calculateTaskPosition(task, settings);
+        note.x = position.x;
+        note.y = position.y;
+
+        // Sanitize task object to remove undefined values which Miro SDK doesn't like
+        const cleanTask = JSON.parse(JSON.stringify(task));
+        await note.setMetadata(TASK_METADATA_KEY, cleanTask);
         await note.sync();
         return;
       }
@@ -75,7 +97,7 @@ export async function updateTask(task: Task): Promise<void> {
 // Delete a task
 export async function deleteTask(taskId: string): Promise<void> {
   try {
-    const stickyNotes = await miro.board.get({ type: 'sticky_note', tags: [TASK_TAG] });
+    const stickyNotes = await miro.board.get({ type: 'sticky_note' });
     
     for (const note of stickyNotes) {
       const metadata = await note.getMetadata(TASK_METADATA_KEY);
@@ -93,7 +115,7 @@ export async function deleteTask(taskId: string): Promise<void> {
 // Get a single task by ID
 export async function getTask(taskId: string): Promise<Task | null> {
   try {
-    const stickyNotes = await miro.board.get({ type: 'sticky_note', tags: [TASK_TAG] });
+    const stickyNotes = await miro.board.get({ type: 'sticky_note' });
     
     for (const note of stickyNotes) {
       const metadata = await note.getMetadata(TASK_METADATA_KEY);

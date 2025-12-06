@@ -5,6 +5,7 @@ import TasksTab from './components/Tabs/TasksTab';
 import CalendarTab from './components/Tabs/CalendarTab';
 import TracksTab from './components/Tabs/TracksTab';
 import SettingsTab from './components/Tabs/SettingsTab';
+import TaskForm from './components/TaskForm';
 import { getMiro } from './miro';
 import './App.css';
 
@@ -15,12 +16,19 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [miroReady, setMiroReady] = useState(false);
+  const [viewMode, setViewMode] = useState<'main' | 'task-form'>('main');
 
   useEffect(() => {
     const init = async () => {
+      // Check URL parameters for view mode
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('mode') === 'create' || params.get('mode') === 'edit') {
+        setViewMode('task-form');
+      }
+
       try {
         // Initialize Miro SDK first
-        const miroInstance = await getMiro();
+        const { instance: miroInstance } = await getMiro();
         
         // Check if we're using real Miro or mock
         const isRealMiro = miroInstance && typeof miroInstance.board?.getInfo === 'function';
@@ -56,6 +64,10 @@ const App: React.FC = () => {
     return <div className="loading">Miro SDKを初期化中...</div>;
   }
 
+  if (viewMode === 'task-form') {
+    return <TaskForm />;
+  }
+
   return (
     <div className="app">
       {!miroReady && (
@@ -67,7 +79,19 @@ const App: React.FC = () => {
           fontSize: '14px',
           color: '#0c5460',
         }}>
-          📦 モックモード: データはブラウザに保存されます（Miroボードとは同期されません）
+          ⚠️ モックモード: Miro SDKに接続できませんでした。データはブラウザに保存されます（Miroボードには描画されません）
+        </div>
+      )}
+      {miroReady && (
+        <div style={{
+          background: '#d4edda',
+          padding: '10px',
+          borderBottom: '1px solid #155724',
+          textAlign: 'center',
+          fontSize: '14px',
+          color: '#155724',
+        }}>
+          ✅ Miro SDKに接続しました。カレンダーはMiroボード上に描画されます。
         </div>
       )}
       <div className="tabs">
