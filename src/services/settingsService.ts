@@ -7,6 +7,10 @@ const SETTINGS_KEY = 'settings';
 const getDefaultSettings = (): Settings => ({
   baseMonth: new Date().toISOString().substring(0, 7), // YYYY-MM
   viewSpanMonths: 3,
+  roles: [
+    { id: 'role-pm', name: 'PM', color: '#ff9999' },
+    { id: 'role-dev', name: 'Dev', color: '#99ccff' }
+  ],
   devs: [],
   tracks: [],
   externalTeams: [],
@@ -81,11 +85,32 @@ export async function loadSettings(): Promise<Settings> {
       ? await shape.getMetadata(SETTINGS_KEY)
       : shape.metadata?.[SETTINGS_KEY];
     
+    let settings: Settings;
     if (metadata) {
-      return metadata as Settings;
+      settings = metadata as Settings;
+    } else {
+      settings = getDefaultSettings();
     }
-    
-    return getDefaultSettings();
+
+    // Ensure required roles exist (Migration for existing data)
+    const defaultRoles = getDefaultSettings().roles;
+    if (!settings.roles) {
+      settings.roles = [...defaultRoles];
+    } else {
+      // Check if PM and Dev roles exist, if not add them
+      const pmExists = settings.roles.some(r => r.id === 'role-pm');
+      if (!pmExists) {
+        const pmRole = defaultRoles.find(r => r.id === 'role-pm');
+        if (pmRole) settings.roles.push(pmRole);
+      }
+      const devExists = settings.roles.some(r => r.id === 'role-dev');
+      if (!devExists) {
+        const devRole = defaultRoles.find(r => r.id === 'role-dev');
+        if (devRole) settings.roles.push(devRole);
+      }
+    }
+
+    return settings;
   } catch (error) {
     console.error('Error loading settings:', error);
     return getDefaultSettings();

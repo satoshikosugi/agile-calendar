@@ -127,3 +127,76 @@ input:focus, textarea:focus, select:focus {
 .form-group select {
   width: 100%;
 }
+
+/* Menu Mode Styles */
+.menu-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  max-width: 400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.menu-title {
+  text-align: center;
+  margin-bottom: 24px;
+  color: #333;
+  font-size: 24px;
+}
+
+.menu-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: bold;
+  color: white;
+  background-color: #4262ff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  text-decoration: none;
+}
+
+.menu-button:hover {
+  background-color: #3350e0;
+  transform: translateY(-1px);
+}
+
+.menu-button:active {
+  transform: translateY(0);
+}
+
+.menu-button.secondary {
+  background-color: #6c757d;
+}
+
+.menu-button.secondary:hover {
+  background-color: #5a6268;
+}
+
+.mock-banner {
+  background: #d1ecf1;
+  padding: 10px;
+  border-bottom: 1px solid #0c5460;
+  text-align: center;
+  font-size: 14px;
+  color: #0c5460;
+}
+
+/* Modal Mode Adjustments */
+.app.modal-mode {
+  height: 100vh;
+  overflow: hidden;
+  background-color: #fff;
+}
+
+.app.modal-mode > div {
+  height: 100%;
+  overflow-y: auto;
+}

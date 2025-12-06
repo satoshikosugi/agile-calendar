@@ -1,9 +1,11 @@
-# GitHub Pagesにデプロイするスクリプト
+# GitHub Pages Deployment Script
+
+$ErrorActionPreference = "Stop"
 
 Write-Host "Starting GitHub Pages deployment..." -ForegroundColor Cyan
 
-# 1. ビルド
-Write-Host "`n[1/4] Building application..." -ForegroundColor Yellow
+# 1. Build
+Write-Host "`n[1/3] Building application..." -ForegroundColor Yellow
 npm run build
 
 if ($LASTEXITCODE -ne 0) {
@@ -11,34 +13,39 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-Write-Host "Build completed successfully!" -ForegroundColor Green
+# 2. Prepare dist folder
+Write-Host "`n[2/3] Preparing deployment..." -ForegroundColor Yellow
 
-# 2. distフォルダをステージング
-Write-Host "`n[2/4] Staging dist folder..." -ForegroundColor Yellow
-git add dist -f
+# Save current directory
+$root = Get-Location
+$dist = Join-Path $root "dist"
 
-# 3. コミット
-Write-Host "`n[3/4] Committing build files..." -ForegroundColor Yellow
-$commitMessage = "Deploy to GitHub Pages - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-git commit -m $commitMessage
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "No changes to commit or commit failed" -ForegroundColor Yellow
-}
-
-# 4. gh-pagesブランチを削除して再作成
-Write-Host "`n[4/4] Deploying to gh-pages branch..." -ForegroundColor Yellow
-Write-Host "Deleting old gh-pages branch..." -ForegroundColor Gray
-git push origin :gh-pages 2>$null
-
-Write-Host "Pushing new gh-pages branch..." -ForegroundColor Gray
-git subtree push --prefix dist origin gh-pages
-
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "`n✅ Deployment successful!" -ForegroundColor Green
-    Write-Host "Your app will be available at: https://satoshikosugi.github.io/agile-calender/" -ForegroundColor Cyan
-    Write-Host "Note: It may take 2-3 minutes for changes to appear." -ForegroundColor Yellow
-} else {
-    Write-Host "`n❌ Deployment failed!" -ForegroundColor Red
+if (-not (Test-Path $dist)) {
+    Write-Host "Dist folder not found!" -ForegroundColor Red
     exit 1
 }
+
+Set-Location $dist
+
+# Initialize a new git repo in dist
+# We need to remove existing .git folder if it exists
+if (Test-Path .git) {
+    Remove-Item .git -Recurse -Force
+}
+
+git init
+git checkout -b gh-pages
+git add -A
+git commit -m "deploy: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+# 3. Push to gh-pages
+Write-Host "`n[3/3] Pushing to GitHub..." -ForegroundColor Yellow
+
+# Push to the remote repository
+git push -f git@github.com:satoshikosugi/agile-calender.git gh-pages
+
+# Return to project root
+Set-Location $root
+
+Write-Host "`n✅ Deployment successful!" -ForegroundColor Green
+Write-Host "Your app will be available at: https://satoshikosugi.github.io/agile-calender/" -ForegroundColor Cyan

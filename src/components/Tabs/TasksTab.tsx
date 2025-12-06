@@ -4,7 +4,12 @@ import { loadTasks } from '../../services/tasksService';
 import { miro } from '../../miro';
 import './TasksTab.css';
 
-const TasksTab: React.FC = () => {
+interface TasksTabProps {
+  onCreateTask?: () => void;
+  onEditTask?: (task: Task) => void;
+}
+
+const TasksTab: React.FC<TasksTabProps> = ({ onCreateTask, onEditTask }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -20,23 +25,31 @@ const TasksTab: React.FC = () => {
   };
 
   const handleCreateTask = async () => {
-    await miro.board.ui.openModal({
-      url: '?mode=create',
-      width: 500,
-      height: 600,
-    });
-    // Reload tasks after modal closes
-    await loadTasksData();
+    if (onCreateTask) {
+      onCreateTask();
+    } else {
+      await miro.board.ui.openModal({
+        url: `${import.meta.env.BASE_URL}?mode=create`,
+        width: 500,
+        height: 600,
+      });
+      // Reload tasks after modal closes
+      await loadTasksData();
+    }
   };
 
   const handleEditTask = async (task: Task) => {
-    await miro.board.ui.openModal({
-      url: `?mode=edit&taskId=${task.id}`,
-      width: 500,
-      height: 600,
-    });
-    // Reload tasks after modal closes
-    await loadTasksData();
+    if (onEditTask) {
+      onEditTask(task);
+    } else {
+      await miro.board.ui.openModal({
+        url: `${import.meta.env.BASE_URL}?mode=edit&taskId=${task.id}`,
+        width: 500,
+        height: 600,
+      });
+      // Reload tasks after modal closes
+      await loadTasksData();
+    }
   };
 
   if (loading) {

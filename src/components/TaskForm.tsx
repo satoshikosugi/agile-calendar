@@ -4,7 +4,13 @@ import { createTask, updateTask, getTask, deleteTask } from '../services/tasksSe
 import { miro } from '../miro';
 import './TaskForm.css';
 
-const TaskForm: React.FC = () => {
+interface TaskFormProps {
+  taskId?: string;
+  mode?: 'create' | 'edit';
+  onClose?: () => void;
+}
+
+const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode, onClose }) => {
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [isNew, setIsNew] = useState(false);
@@ -12,8 +18,8 @@ const TaskForm: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       const params = new URLSearchParams(window.location.search);
-      const taskId = params.get('taskId');
-      const mode = params.get('mode');
+      const taskId = propTaskId || params.get('taskId');
+      const mode = propMode || params.get('mode');
 
       if (mode === 'create') {
         setIsNew(true);
@@ -44,13 +50,21 @@ const TaskForm: React.FC = () => {
           setTask(loadedTask);
         } else {
           alert('Task not found');
-          await miro.board.ui.closeModal();
+          handleClose();
         }
       }
       setLoading(false);
     };
     init();
-  }, []);
+  }, [propTaskId, propMode]);
+
+  const handleClose = async () => {
+    if (onClose) {
+      onClose();
+    } else {
+      await miro.board.ui.closeModal();
+    }
+  };
 
   const handleSave = async () => {
     if (!task) return;
@@ -61,7 +75,7 @@ const TaskForm: React.FC = () => {
       } else {
         await updateTask(task);
       }
-      await miro.board.ui.closeModal();
+      await handleClose();
     } catch (error) {
       console.error('Error saving task:', error);
       alert('Failed to save task');
@@ -69,7 +83,7 @@ const TaskForm: React.FC = () => {
   };
 
   const handleCancel = async () => {
-    await miro.board.ui.closeModal();
+    await handleClose();
   };
 
   const handleDelete = async () => {
@@ -77,7 +91,7 @@ const TaskForm: React.FC = () => {
     if (confirm('このタスクを削除してもよろしいですか？')) {
       try {
         await deleteTask(task.id);
-        await miro.board.ui.closeModal();
+        await handleClose();
       } catch (error) {
         console.error('Error deleting task:', error);
         alert('Failed to delete task');
@@ -104,7 +118,6 @@ const TaskForm: React.FC = () => {
       <div className="form-group">
         <label>概要</label>
         <textarea
-          rows={3}
           value={task.summary}
           onChange={(e) => setTask({ ...task, summary: e.target.value })}
         />
@@ -116,11 +129,11 @@ const TaskForm: React.FC = () => {
           value={task.status}
           onChange={(e) => setTask({ ...task, status: e.target.value as TaskStatus })}
         >
-          <option value="Draft">下書き</option>
-          <option value="Planned">計画済み</option>
-          <option value="Scheduled">スケジュール済み</option>
-          <option value="Done">完了</option>
-          <option value="Canceled">キャンセル</option>
+          <option value="Draft">Draft</option>
+          <option value="Planned">Planned</option>
+          <option value="Scheduled">Scheduled</option>
+          <option value="Done">Done</option>
+          <option value="Canceled">Canceled</option>
         </select>
       </div>
 
@@ -130,70 +143,6 @@ const TaskForm: React.FC = () => {
           type="date"
           value={task.date || ''}
           onChange={(e) => setTask({ ...task, date: e.target.value })}
-        />
-      </div>
-
-      <div className="form-group">
-        <label>開始時間（省略可）</label>
-        <select
-          value={task.time?.startTime || ''}
-          onChange={(e) =>
-            setTask({
-              ...task,
-              time: e.target.value ? {
-                startTime: e.target.value,
-                duration: task.time?.duration,
-              } : undefined,
-            })
-          }
-        >
-          <option value="">未設定</option>
-          {Array.from({ length: 109 }, (_, i) => {
-            const totalMinutes = 9 * 60 + i * 5;
-            if (totalMinutes > 18 * 60) return null;
-            const hour = Math.floor(totalMinutes / 60);
-            const min = totalMinutes % 60;
-            const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-            return <option key={time} value={time}>{time}</option>;
-          })}
-        </select>
-      </div>
-
-      <div className="form-group">
-        <label>所要時間（省略可）</label>
-        <select
-          value={task.time?.duration || ''}
-          onChange={(e) =>
-            setTask({
-              ...task,
-              time: e.target.value ? {
-                startTime: task.time?.startTime,
-                duration: parseInt(e.target.value),
-              } : undefined,
-            })
-          }
-        >
-          <option value="">未設定</option>
-          {Array.from({ length: 96 }, (_, i) => {
-            const minutes = (i + 1) * 5;
-            if (minutes > 480) return null;
-            const hours = Math.floor(minutes / 60);
-            const mins = minutes % 60;
-            const label = hours > 0 
-              ? (mins > 0 ? `${hours}時間${mins}分` : `${hours}時間`)
-              : `${mins}分`;
-            return <option key={minutes} value={minutes}>{label}</option>;
-          })}
-        </select>
-      </div>
-
-      <div className="form-group">
-        <label>外部リンク</label>
-        <input
-          type="url"
-          value={task.externalLink || ''}
-          onChange={(e) => setTask({ ...task, externalLink: e.target.value })}
-          placeholder="https://..."
         />
       </div>
 

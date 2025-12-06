@@ -40,15 +40,22 @@ export interface ExternalParticipant {
   timeFixed: boolean;
 }
 
+export interface Role {
+  id: string;
+  name: string;
+  color?: string;
+}
+
 export interface Dev {
   id: string;
   name: string;
+  roleId?: string; // Optional for backward compatibility, but should be set
 }
 
 export interface Track {
   id: string;
   name: string;
-  role: string;
+  role: string; // This could be linked to Role.id in future, currently string 'Dev' etc.
   capacity: number;
   active: boolean;
 }
@@ -73,6 +80,7 @@ export interface DailyTrackAssignment {
 export interface Settings {
   baseMonth: string; // YYYY-MM
   viewSpanMonths: number;
+  roles: Role[]; // Added roles management
   devs: Dev[];
   tracks: Track[];
   externalTeams: ExternalTeam[];
