@@ -187,3 +187,32 @@
   background-color: #e3f2fd;
   border-left: 4px solid #2196f3;
 }
+
+/* External Teams Column */
+.external-teams-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.external-team-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: #e3f2fd;
+  color: #1565c0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.badge-icon {
+  font-size: 0.9em;
+}
+
+.text-muted {
+  color: #999;
+  font-style: italic;
+}
+

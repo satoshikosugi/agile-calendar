@@ -278,6 +278,79 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
       </div>
 
       <div className="form-section">
+        <h3>外部チーム連携</h3>
+        <div className="form-group">
+          <div className="checkbox-group">
+            {settings.externalTeams.length > 0 ? settings.externalTeams.map(team => {
+              const participant = task.externalParticipants.find(p => p.teamId === team.id);
+              const isSelected = !!participant;
+              
+              return (
+                <div key={team.id} className="external-team-row">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          // Add
+                          setTask({
+                            ...task,
+                            externalParticipants: [
+                              ...task.externalParticipants,
+                              { teamId: team.id, required: false, timeFixed: false }
+                            ]
+                          });
+                        } else {
+                          // Remove
+                          setTask({
+                            ...task,
+                            externalParticipants: task.externalParticipants.filter(p => p.teamId !== team.id)
+                          });
+                        }
+                      }}
+                    />
+                    {team.name}
+                  </label>
+                  
+                  {isSelected && (
+                    <div className="external-team-options">
+                      <label className="option-label">
+                        <input
+                          type="checkbox"
+                          checked={participant?.required || false}
+                          onChange={(e) => {
+                            const updated = task.externalParticipants.map(p => 
+                              p.teamId === team.id ? { ...p, required: e.target.checked } : p
+                            );
+                            setTask({ ...task, externalParticipants: updated });
+                          }}
+                        />
+                        必須
+                      </label>
+                      <label className="option-label">
+                        <input
+                          type="checkbox"
+                          checked={participant?.timeFixed || false}
+                          onChange={(e) => {
+                            const updated = task.externalParticipants.map(p => 
+                              p.teamId === team.id ? { ...p, timeFixed: e.target.checked } : p
+                            );
+                            setTask({ ...task, externalParticipants: updated });
+                          }}
+                        />
+                        時間固定
+                      </label>
+                    </div>
+                  )}
+                </div>
+              );
+            }) : <p className="no-data">外部チームが設定されていません</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="form-section">
         <h3>開発計画</h3>
         <div className="form-group">
           <label>開発モード</label>

@@ -60,6 +60,9 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings }) => {
       const task = tasks.find(t => t.id === selectedTaskId);
       if (!task || !task.time?.startTime) return;
 
+      // Check if time is fixed by external team
+      if (task.externalParticipants?.some(p => p.timeFixed)) return;
+
       const currentMins = parseTime(task.time.startTime);
       const duration = task.time.duration || 30;
       let newMins = currentMins;
@@ -227,6 +230,10 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings }) => {
 
   const handleTimetableSlotClick = (startTime: string) => {
     if (!selectedTaskId) return;
+    
+    const task = tasks.find(t => t.id === selectedTaskId);
+    if (task?.externalParticipants?.some(p => p.timeFixed)) return;
+
     handleTimeUpdate(selectedTaskId, { startTime });
   };
 
@@ -444,6 +451,7 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings }) => {
                 <th>タイトル</th>
                 <th>PM</th>
                 <th>Dev</th>
+                <th>外部チーム</th>
                 <th>時間</th>
                 <th>アクション</th>
               </tr>
@@ -451,7 +459,7 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings }) => {
             <tbody>
               {filteredTasks.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="no-data">タスクがありません</td>
+                  <td colSpan={6} className="no-data">タスクがありません</td>
                 </tr>
               ) : (
                 filteredTasks.map(task => {
@@ -459,6 +467,8 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings }) => {
                       ? checkAvailability(task.roles.pmId, task.date, task.time?.startTime, task.time?.duration)
                       : 'unknown';
                   
+                  const isTimeFixed = task.externalParticipants?.some(p => p.timeFixed);
+
                   return (
                   <tr 
                     key={task.id} 
@@ -511,11 +521,32 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings }) => {
                       )}
                     </td>
                     <td>
+                      <div className="external-teams-cell">
+                        {task.externalParticipants && task.externalParticipants.length > 0 ? (
+                          task.externalParticipants.map(p => {
+                            const team = settings.externalTeams.find(t => t.id === p.teamId);
+                            if (!team) return null;
+                            return (
+                              <div key={p.teamId} className="external-team-badge">
+                                {team.name}
+                                {p.required && <span className="badge-icon" title="必須">★</span>}
+                                {p.timeFixed && <span className="badge-icon" title="時間固定">🔒</span>}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <span className="text-muted">-</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
                       <div className="time-edit">
                           <select
                               value={task.time?.startTime || ''}
                               onChange={(e) => handleTimeUpdate(task.id, { startTime: e.target.value })}
                               className="compact-select time-select"
+                              disabled={isTimeFixed}
+                              title={isTimeFixed ? "外部チームにより時間が固定されています" : ""}
                           >
                               <option value="">開始...</option>
                               {timeOptions.map(t => (
@@ -526,6 +557,8 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings }) => {
                               value={task.time?.duration || ''}
                               onChange={(e) => handleTimeUpdate(task.id, { duration: parseInt(e.target.value) })}
                               className="compact-select duration-select"
+                              disabled={isTimeFixed}
+                              title={isTimeFixed ? "外部チームにより時間が固定されています" : ""}
                           >
                               <option value="">時間...</option>
                               {durationOptions.map(d => (

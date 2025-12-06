@@ -124,3 +124,28 @@
 .form-row .form-group {
   flex: 1;
 }
+
+/* External Teams */
+.external-team-row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+  padding: 4px 0;
+}
+
+.external-team-options {
+  display: flex;
+  gap: 16px;
+  margin-left: 28px;
+  margin-top: 4px;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.option-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
