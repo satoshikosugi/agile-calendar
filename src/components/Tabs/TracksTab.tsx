@@ -275,7 +275,7 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
       devs: [...settings.devs, newDev]
     });
     setNewDevName('');
-    setNewDevRoleId('');
+    // Role is kept for continuous entry
   };
 
   const handleUpdateDev = (devId: string, updates: Partial<Dev>) => {

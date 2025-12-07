@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Task, Settings, DevMode, PersonalSchedule, PersonalScheduleType } from '../../models/types';
-import { loadTasks, updateTask, createTask, deleteTask } from '../../services/tasksService';
+import { Task, Settings, DevMode, PersonalSchedule, PersonalScheduleType, TaskStatus } from '../../models/types';
+import { loadTasks, updateTask, createTask, deleteTask, renderPersonalSchedulesForMonth } from '../../services/tasksService';
 import { WORKING_START_MIN, WORKING_END_MIN, parseTime, formatTime, getDevEvents } from '../../services/scheduleService';
 import Timetable, { TimetableColumnGroup } from '../Timetable';
 import './StandupTab.css';
@@ -78,10 +78,19 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
     title: '',
     pmId: '',
     devMode: 'NoDev' as DevMode,
+    requiredTrackCount: 0,
     externalTeamId: '',
     startTime: '',
     duration: 30
   });
+  
+  const taskInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showTaskForm && taskInputRef.current) {
+      taskInputRef.current.focus();
+    }
+  }, [showTaskForm]);
 
   useEffect(() => {
     loadTasksData();
@@ -129,11 +138,11 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedTaskId, tasks, settings, filterDate]);
 
-  const loadTasksData = async () => {
-    setLoading(true);
+  const loadTasksData = async (silent = false) => {
+    if (!silent) setLoading(true);
     const loadedTasks = await loadTasks();
     setTasks(loadedTasks);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   const getFilteredTasks = () => {
@@ -189,7 +198,7 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
       
       for (const task of tasksToSave) {
         try {
-          await updateTask(task);
+          await updateTask(task, settings);
         } catch (error) {
           console.error('Failed to update task', error);
           // Reload on error to ensure consistency
@@ -270,33 +279,6 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
     handleTimeUpdate(selectedTaskId, { startTime });
   };
 
-  const handleConfirmPlan = async (task: Task) => {
-    const isNoDev = task.roles.devPlan.mode === 'NoDev';
-    const message = isNoDev 
-        ? 'このタスクを確定しますか？（Devなしのため、ステータスが「確定済」になります）'
-        : 'このタスクの計画を確定しますか？（ステータスが「計画済」になります）';
-
-    if (confirm(message)) {
-        const updates: Partial<Task> = {
-            roles: {
-                ...task.roles,
-                devPlan: {
-                    ...task.roles.devPlan,
-                    phase: 'Phase1Planned'
-                }
-            }
-        };
-
-        if (isNoDev) {
-            updates.status = 'Scheduled';
-        } else {
-            updates.status = 'Planned';
-        }
-
-        await handleTaskUpdate(task.id, updates);
-    }
-  };
-
   const checkTaskConflict = (task: Task) => {
     if (!task.date || !task.time?.startTime || !task.time?.duration) return false;
 
@@ -322,39 +304,7 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
     return false;
   };
 
-  const checkAvailability = (devId: string, date: string, startTime?: string, duration?: number) => {
-    // Check Project Holidays
-    const isProjectHoliday = settings.projectHolidays?.some(h => h.date === date);
-    if (isProjectHoliday) return 'unavailable';
 
-    if (!startTime || !duration) return 'unknown';
-    
-    const schedules = settings.personalSchedules[devId] || [];
-    const daySchedules = schedules.filter(s => s.date === date);
-    
-    // Check full day off
-    if (daySchedules.some(s => s.type === 'fullDayOff')) return 'unavailable';
-    
-    // Check partial overlap (including nonAgileTask and personalErrand)
-    const [startH, startM] = startTime.split(':').map(Number);
-    const startMins = startH * 60 + startM;
-    const endMins = startMins + duration;
-
-    for (const s of daySchedules) {
-        if ((s.type === 'partial' || s.type === 'nonAgileTask' || s.type === 'personalErrand') && s.start && s.end) {
-            const [sStartH, sStartM] = s.start.split(':').map(Number);
-            const [sEndH, sEndM] = s.end.split(':').map(Number);
-            const sStartMins = sStartH * 60 + sStartM;
-            const sEndMins = sEndH * 60 + sEndM;
-
-            if (startMins < sEndMins && endMins > sStartMins) {
-                return 'conflict';
-            }
-        }
-    }
-
-    return 'available';
-  };
 
   const handleTimetableHeaderClick = (devId: string) => {
     if (!selectedTaskId) return;
@@ -424,6 +374,7 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
             title: '',
             pmId: '',
             devMode: 'NoDev',
+            requiredTrackCount: 0,
             externalTeamId: '',
             startTime: '',
             duration: 30
@@ -449,7 +400,7 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
         devPlan: {
           phase: 'Draft',
           mode: newTaskData.devMode,
-          requiredTrackCount: newTaskData.devMode === 'Tracks' ? 1 : 0,
+          requiredTrackCount: newTaskData.requiredTrackCount,
           assignedTrackIds: []
         }
       },
@@ -471,30 +422,40 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
 
     setTasks([...tasks, newTask]);
     await createTask(newTask);
-    loadTasksData();
+    await loadTasksData(true);
     setShowTaskForm(false);
+    setSelectedTaskId(newTask.id);
   };
 
-  const handleAddSchedule = () => {
+  const handleAddSchedule = async () => {
     if (!newScheduleDevId) return;
     
     const devSchedules = settings.personalSchedules[newScheduleDevId] || [];
     const updatedSchedules = [...devSchedules, { ...newSchedule, date: filterDate }];
     
-    onSettingsUpdate({
+    const newSettings = {
       ...settings,
       personalSchedules: {
         ...settings.personalSchedules,
         [newScheduleDevId]: updatedSchedules
       }
-    });
+    };
+
+    onSettingsUpdate(newSettings);
     
     setShowScheduleForm(false);
     setNewSchedule({ ...newSchedule, reason: '' });
+
+    // Trigger calendar update for personal schedules
+    try {
+        const yearMonth = filterDate.substring(0, 7);
+        await renderPersonalSchedulesForMonth(yearMonth);
+    } catch (e) {
+        console.error('Failed to update calendar personal schedules', e);
+    }
   };
 
   const filteredTasks = getFilteredTasks();
-  const pmDev = settings.devs.find(d => d.roleId === 'role-pm');
   const timeOptions = generateTimeOptions();
   const durationOptions = generateDurationOptions();
 
@@ -564,6 +525,68 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
     });
   }
 
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [rescheduleDate, setRescheduleDate] = useState('');
+
+  const toggleSelect = (taskId: string) => {
+    const newSelected = new Set(selectedTaskIds);
+    if (newSelected.has(taskId)) {
+      newSelected.delete(taskId);
+    } else {
+      newSelected.add(taskId);
+    }
+    setSelectedTaskIds(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedTaskIds.size === filteredTasks.length) {
+      setSelectedTaskIds(new Set());
+    } else {
+      setSelectedTaskIds(new Set(filteredTasks.map(t => t.id)));
+    }
+  };
+
+  const handleRescheduleSelected = async () => {
+    if (selectedTaskIds.size === 0) return;
+    if (!rescheduleDate) {
+        alert('移動先の日付を選択してください');
+        return;
+    }
+
+    if (!confirm(`${selectedTaskIds.size}件のタスクを ${rescheduleDate} に移動しますか？`)) return;
+
+    setLoading(true);
+    try {
+        const tasksToUpdate = tasks.filter(t => selectedTaskIds.has(t.id));
+        for (const task of tasksToUpdate) {
+            await updateTask({ ...task, date: rescheduleDate });
+        }
+        await loadTasksData();
+        setSelectedTaskIds(new Set());
+        setRescheduleDate('');
+        alert('移動が完了しました。');
+    } catch (error) {
+        console.error(error);
+        alert('移動中にエラーが発生しました。');
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const handleStatusToggle = async (task: Task) => {
+      let newStatus: TaskStatus = task.status;
+      if (task.status === 'Draft') {
+          newStatus = 'Planned';
+      } else if (task.status === 'Planned') {
+          newStatus = 'Draft';
+      } else {
+          return;
+      }
+      
+      await handleTaskUpdate(task.id, { status: newStatus });
+  };
+
+
   if (loading) return <div>Loading...</div>;
 
   return (
@@ -591,10 +614,24 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
         </div>
       </div>
 
+      {/* Bulk Actions */}
+      {selectedTaskIds.size > 0 && (
+        <div className="bulk-actions" style={{ padding: '10px', background: '#f0f0f0', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span>{selectedTaskIds.size}件選択中</span>
+          <input 
+            type="date" 
+            value={rescheduleDate} 
+            onChange={(e) => setRescheduleDate(e.target.value)}
+          />
+          <button onClick={handleRescheduleSelected}>まとめて移動</button>
+        </div>
+      )}
+
       {showTaskForm && (
         <div className="schedule-quick-form">
           <div className="form-row">
             <input 
+              ref={taskInputRef}
               type="text" 
               placeholder="タスク名" 
               value={newTaskData.title}
@@ -613,13 +650,25 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
               ))}
             </select>
             <select 
-              value={newTaskData.devMode} 
-              onChange={(e) => setNewTaskData({...newTaskData, devMode: e.target.value as DevMode})}
+              value={`${newTaskData.devMode}:${newTaskData.devMode === 'Tracks' ? newTaskData.requiredTrackCount : 0}`}
+              onChange={(e) => {
+                  const [mode, countStr] = e.target.value.split(':');
+                  setNewTaskData({
+                      ...newTaskData, 
+                      devMode: mode as DevMode,
+                      requiredTrackCount: parseInt(countStr)
+                  });
+              }}
               className="compact-select"
             >
-              <option value="NoDev">Devなし</option>
-              <option value="Tracks">トラック数</option>
-              <option value="AllDev">全員</option>
+              <option value="NoDev:0">Devなし</option>
+              {settings.tracks.slice(0, -1).map((_, i) => {
+                  const count = i + 1;
+                  return (
+                      <option key={count} value={`Tracks:${count}`}>{count} Track{count > 1 ? 's' : ''}</option>
+                  );
+              })}
+              <option value="AllDev:0">全員</option>
             </select>
             <select 
               value={newTaskData.externalTeamId} 
@@ -678,7 +727,27 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
               <>
                 <select 
                   value={newSchedule.start} 
-                  onChange={(e) => setNewSchedule({...newSchedule, start: e.target.value})}
+                  onChange={(e) => {
+                    const newStart = e.target.value;
+                    let newEnd = newSchedule.end;
+                    if (newSchedule.start && newSchedule.end) {
+                        const [h1, m1] = newSchedule.start.split(':').map(Number);
+                        const [h2, m2] = newSchedule.end.split(':').map(Number);
+                        const startMins = h1 * 60 + m1;
+                        const endMins = h2 * 60 + m2;
+                        const duration = endMins - startMins;
+                        if (duration > 0) {
+                            const [h3, m3] = newStart.split(':').map(Number);
+                            const newStartMins = h3 * 60 + m3;
+                            const newEndMins = newStartMins + duration;
+                            const endH = Math.floor(newEndMins / 60);
+                            const endM = newEndMins % 60;
+                            const formattedEnd = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+                            newEnd = formattedEnd;
+                        }
+                    }
+                    setNewSchedule({...newSchedule, start: newStart, end: newEnd});
+                  }}
                   className="compact-select"
                 >
                   {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
@@ -710,6 +779,13 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
           <table className="standup-table">
             <thead>
               <tr>
+                <th style={{width: '30px'}}>
+                    <input 
+                        type="checkbox" 
+                        checked={selectedTaskIds.size === filteredTasks.length && filteredTasks.length > 0}
+                        onChange={toggleSelectAll}
+                    />
+                </th>
                 <th>タイトル</th>
                 <th>PM</th>
                 <th>Dev</th>
@@ -719,162 +795,138 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
               </tr>
             </thead>
             <tbody>
-              {filteredTasks.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="no-data">タスクがありません</td>
-                </tr>
-              ) : (
-                filteredTasks.map(task => {
-                  const pmAvailability = (task.roles.pmId && task.date) 
-                      ? checkAvailability(task.roles.pmId, task.date, task.time?.startTime, task.time?.duration)
-                      : 'unknown';
-                  
-                  const isTimeFixed = task.externalParticipants?.some(p => p.timeFixed) || task.constraints?.timeLocked;
-                  const isConflict = checkTaskConflict(task);
-
-                  return (
+              {filteredTasks.map(task => {
+                const isSelected = selectedTaskId === task.id;
+                const conflict = checkTaskConflict(task);
+                const isChecked = selectedTaskIds.has(task.id);
+                
+                return (
                   <tr 
                     key={task.id} 
-                    className={`task-row status-${task.status.toLowerCase()} ${selectedTaskId === task.id ? 'selected' : ''} ${isConflict ? 'has-conflict' : ''}`}
-                    onClick={() => setSelectedTaskId(prev => prev === task.id ? null : task.id)}
-                    onDoubleClick={() => onEditTask && onEditTask(task)}
+                    className={`${isSelected ? 'selected' : ''} ${conflict ? 'conflict' : ''}`}
+                    onClick={() => setSelectedTaskId(task.id)}
                   >
-                    <td>
-                      {selectedTaskId === task.id && (
-                        <button 
-                          className="floating-edit-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditTask && onEditTask(task);
-                          }}
-                        >
-                          編集
-                        </button>
-                      )}
-                      <div className="task-title" style={{ display: 'flex', alignItems: 'center' }}>
-                        {isTimeFixed && <span title="時間固定" style={{ marginRight: '4px', fontSize: '0.9em' }}>🔒</span>}
-                        <span>{task.title}</span>
-                      </div>
-                      <div className="task-summary">{task.summary}</div>
+                    <td onClick={(e) => e.stopPropagation()}>
+                        <input 
+                            type="checkbox" 
+                            checked={isChecked}
+                            onChange={() => toggleSelect(task.id)}
+                        />
                     </td>
                     <td>
-                      {pmDev ? (
-                          <div className="pm-check">
-                              <label>
-                                  <input 
-                                      type="checkbox"
-                                      checked={task.roles.pmId === pmDev.id}
-                                      onChange={(e) => handleRoleUpdate(task.id, { pmId: e.target.checked ? pmDev.id : undefined })}
-                                  />
-                              </label>
-                              {task.roles.pmId && pmAvailability !== 'available' && pmAvailability !== 'unknown' && (
-                                  <span className="availability-warning" title="PMの予定と重複しています">⚠️</span>
-                              )}
-                          </div>
-                      ) : (
-                          <span className="no-pm-alert">PM未設定</span>
-                      )}
+                      <input 
+                        type="text" 
+                        value={task.title} 
+                        onChange={(e) => handleTaskUpdate(task.id, { title: e.target.value })}
+                      />
                     </td>
                     <td>
-                      <select
-                        value={`${task.roles.devPlan.mode}:${task.roles.devPlan.mode === 'Tracks' ? task.roles.devPlan.requiredTrackCount : 0}`}
-                        onChange={(e) => {
-                          const [mode, countStr] = e.target.value.split(':');
-                          handleDevPlanUpdate(task.id, { 
-                            mode: mode as DevMode, 
-                            requiredTrackCount: parseInt(countStr) 
-                          });
-                        }}
-                        className="compact-select"
+                      <select 
+                        value={task.roles.pmId || ''} 
+                        onChange={(e) => handleRoleUpdate(task.id, { pmId: e.target.value || undefined })}
                       >
-                        <option value="NoDev:0">なし</option>
-                        {settings.tracks.slice(0, -1).map((_, i) => {
-                          const count = i + 1;
-                          return (
-                            <option key={count} value={`Tracks:${count}`}>
-                              {count} Track{count > 1 ? 's' : ''}
-                            </option>
-                          );
-                        })}
-                        <option value="AllDev:0">全員</option>
+                        <option value="">-</option>
+                        {settings.devs.filter(d => d.roleId === 'role-pm').map(d => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
                       </select>
                     </td>
                     <td>
-                      <div className="external-teams-cell">
-                        {task.externalParticipants && task.externalParticipants.length > 0 ? (
-                          task.externalParticipants.map(p => {
-                            const team = settings.externalTeams.find(t => t.id === p.teamId);
-                            if (!team) return null;
-                            return (
-                              <div key={p.teamId} className="external-team-badge">
-                                {team.name}
-                                {p.required && <span className="badge-icon" title="必須">★</span>}
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <span className="text-muted">-</span>
+                      <div className="dev-cell">
+                        <select 
+                          value={task.roles.devPlan.mode} 
+                          onChange={(e) => handleDevPlanUpdate(task.id, { mode: e.target.value })}
+                        >
+                          <option value="NoDev">なし</option>
+                          <option value="Tracks">トラック</option>
+                          <option value="Any">誰でも</option>
+                        </select>
+                        {task.roles.devPlan.mode === 'Tracks' && (
+                          <input 
+                            type="number" 
+                            className="track-count"
+                            min="1" 
+                            max="4"
+                            value={task.roles.devPlan.requiredTrackCount}
+                            onChange={(e) => handleDevPlanUpdate(task.id, { requiredTrackCount: parseInt(e.target.value) })}
+                          />
                         )}
                       </div>
                     </td>
                     <td>
-                      <div className="time-edit">
-                          <select
-                              value={task.time?.startTime || ''}
-                              onChange={(e) => handleTimeUpdate(task.id, { startTime: e.target.value })}
-                              className="compact-select time-select"
-                              disabled={isTimeFixed}
-                              title={isTimeFixed ? "時間が固定されています" : ""}
-                          >
-                              <option value="">開始...</option>
-                              {timeOptions.map(t => (
-                                  <option key={t} value={t}>{t}</option>
-                              ))}
-                          </select>
-                          <select
-                              value={task.time?.duration || ''}
-                              onChange={(e) => handleTimeUpdate(task.id, { duration: parseInt(e.target.value) })}
-                              className="compact-select duration-select"
-                              disabled={isTimeFixed}
-                              title={isTimeFixed ? "時間が固定されています" : ""}
-                          >
-                              <option value="">時間...</option>
-                              {durationOptions.map(d => (
-                                  <option key={d.value} value={d.value}>{d.label}</option>
-                              ))}
-                          </select>
+                      <select 
+                        value={task.externalParticipants?.[0]?.teamId || ''} 
+                        onChange={(e) => {
+                          const teamId = e.target.value;
+                          const newParticipants = teamId ? [{ teamId, required: true, timeFixed: false }] : [];
+                          handleTaskUpdate(task.id, { externalParticipants: newParticipants });
+                        }}
+                      >
+                        <option value="">-</option>
+                        {settings.externalTeams.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <div className="time-cell">
+                        <select 
+                          value={task.time?.startTime || ''} 
+                          onChange={(e) => handleTimeUpdate(task.id, { startTime: e.target.value })}
+                        >
+                          <option value="">未定</option>
+                          {timeOptions.map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                        <select 
+                          value={task.time?.duration || 30} 
+                          onChange={(e) => handleTimeUpdate(task.id, { duration: parseInt(e.target.value) })}
+                        >
+                          {durationOptions.map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
                       </div>
                     </td>
                     <td>
-                      {task.roles.devPlan.phase !== 'Phase1Planned' && task.status !== 'Scheduled' && (
-                          <button 
-                              className={`btn btn-sm ${task.roles.devPlan.mode === 'NoDev' ? 'btn-success' : 'btn-primary'}`}
-                              onClick={() => handleConfirmPlan(task)}
-                              disabled={!task.time?.startTime || !task.time?.duration}
-                          >
-                              {task.roles.devPlan.mode === 'NoDev' ? '確定' : '計画済'}
-                          </button>
-                      )}
-                      {(task.roles.devPlan.phase === 'Phase1Planned' || task.status === 'Scheduled') && (
-                          <span className="badge badge-success">
-                              {task.status === 'Scheduled' ? '確定済' : '計画済'}
-                          </span>
-                      )}
+                      <div className="action-buttons">
+                        <button 
+                            className={`status-btn ${task.status.toLowerCase()}`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleStatusToggle(task);
+                            }}
+                        >
+                            {task.status === 'Draft' ? '下書き' : 
+                             task.status === 'Planned' ? '計画済' : '完了'}
+                        </button>
+                        <button onClick={(e) => {
+                          e.stopPropagation();
+                          if(onEditTask) onEditTask(task);
+                        }}>詳細</button>
+                        <button 
+                          className="delete-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if(confirm('削除しますか？')) handleDeleteTask(task.id);
+                          }}
+                        >×</button>
+                      </div>
                     </td>
                   </tr>
-                )})
-              )}
+                );
+              })}
             </tbody>
           </table>
         </div>
-        <div className="timetable-wrapper">
+
+        <div className="timetable-container">
           <Timetable 
-            date={filterDate}
-            tasks={filteredTasks}
             settings={settings}
-            selectedTaskId={selectedTaskId}
+            tasks={filteredTasks}
+            date={filterDate}
             onSlotClick={handleTimetableSlotClick}
-            onEventClick={(taskId) => setSelectedTaskId(taskId)}
             onHeaderClick={handleTimetableHeaderClick}
             columnGroups={columnGroups}
           />

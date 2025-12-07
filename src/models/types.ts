@@ -1,6 +1,6 @@
 // Data models based on the specification in develop.md
 
-export type TaskStatus = 'Draft' | 'Planned' | 'Scheduled' | 'Done' | 'Canceled';
+export type TaskStatus = 'Draft' | 'Planned' | 'Done';
 export type DevPlanPhase = 'Draft' | 'Phase1Planned' | 'Phase2Fixed';
 export type DevMode = 'NoDev' | 'Tracks' | 'AllDev';
 export type PersonalScheduleType = 'fullDayOff' | 'partial' | 'nonAgileTask' | 'personalErrand';

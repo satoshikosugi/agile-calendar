@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Task } from './models/types';
 import { loadSettings, saveSettings } from './services/settingsService';
 import TasksTab from './components/Tabs/TasksTab';
@@ -8,6 +8,8 @@ import SettingsTab from './components/Tabs/SettingsTab';
 import StandupTab from './components/Tabs/StandupTab';
 import TaskForm from './components/TaskForm';
 import { getMiro } from './miro';
+import { handleTaskMove } from './services/tasksService';
+import buildInfo from './build-info.json';
 import './App.css';
 
 type ViewMode = 'menu' | 'tasks' | 'calendar' | 'tracks' | 'settings' | 'task-form' | 'standup';
@@ -18,6 +20,9 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [miroReady, setMiroReady] = useState(false);
   
+  // State for tracking item movement stability
+  const trackedItemsRef = useRef<Map<string, { x: number, y: number, stableCount: number, type: string }>>(new Map());
+  
   // State for TaskForm navigation
   const [editingTaskId, setEditingTaskId] = useState<string | undefined>(undefined);
   const [taskFormMode, setTaskFormMode] = useState<'create' | 'edit'>('create');
@@ -27,6 +32,8 @@ const App: React.FC = () => {
   const [standupDate, setStandupDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
+    let intervalId: any = null;
+
     const init = async () => {
       // Check URL parameters for view mode
       const params = new URLSearchParams(window.location.search);
@@ -56,6 +63,139 @@ const App: React.FC = () => {
         
         if (isRealMiro) {
           console.log('✅ Connected to Miro board');
+          
+          // Event-driven architecture to reduce API calls
+          // Only poll when items are selected
+          const handleSelectionUpdate = async () => {
+              const selection = await miroInstance.board.getSelection();
+              
+              // 1. Check for Calendar Cell Click (Immediate action)
+              if (selection.length === 1) {
+                  const item = selection[0];
+                  try {
+                      if (item.type === 'shape' || item.type === 'text') {
+                          const appType = await item.getMetadata('appType');
+                          if (appType === 'calendarCell') {
+                              const date = await item.getMetadata('date');
+                              if (date) {
+                                  console.log('Calendar cell clicked:', date);
+                                  // Open Standup Modal
+                                  const width = 1200;
+                                  const height = 768;
+                                  await miroInstance.board.ui.openModal({
+                                      url: `${import.meta.env.BASE_URL}?mode=standup&date=${date}`,
+                                      width,
+                                      height,
+                                      fullscreen: false,
+                                  });
+                                  
+                                  await miroInstance.board.deselect();
+                                  return; 
+                              }
+                          }
+                      }
+                  } catch (e) {
+                      console.error('Error checking metadata:', e);
+                  }
+              }
+
+              // 2. Manage Polling Loop for Dragging
+              if (selection.length > 0) {
+                  // Start polling if not running
+                  if (!intervalId) {
+                      console.log('Selection detected. Starting polling loop...');
+                      // Initialize tracking for new selection
+                      for (const item of selection) {
+                          if (!trackedItemsRef.current.has(item.id)) {
+                              trackedItemsRef.current.set(item.id, { 
+                                  x: item.x, 
+                                  y: item.y, 
+                                  stableCount: 0, 
+                                  type: item.type 
+                              });
+                          }
+                      }
+
+                      intervalId = setInterval(async () => {
+                          try {
+                              // Re-fetch selection to get current positions
+                              const currentSelection = await miroInstance.board.getSelection();
+                              const currentIds = new Set(currentSelection.map((i: any) => i.id));
+                              const itemsToMove: any[] = [];
+
+                              // Check tracked items
+                              for (const item of currentSelection) {
+                                  let tracked = trackedItemsRef.current.get(item.id);
+                                  if (!tracked) {
+                                      // New item added to selection
+                                      tracked = { x: item.x, y: item.y, stableCount: 0, type: item.type };
+                                      trackedItemsRef.current.set(item.id, tracked);
+                                  } else {
+                                      // Check movement
+                                      const dx = Math.abs(tracked.x - item.x);
+                                      const dy = Math.abs(tracked.y - item.y);
+                                      
+                                      if (dx < 2 && dy < 2) {
+                                          tracked.stableCount++;
+                                          // Trigger move if stable for ~1 second
+                                          if (tracked.stableCount === 1) { // 1 * 1000ms
+                                              if (item.type === 'sticky_note') {
+                                                  console.log('Item stable, triggering move:', item.id);
+                                                  itemsToMove.push(item);
+                                              }
+                                          }
+                                      } else {
+                                          tracked.x = item.x;
+                                          tracked.y = item.y;
+                                          tracked.stableCount = 0;
+                                      }
+                                  }
+                              }
+
+                              // Handle Deselection (Drop)
+                              for (const id of trackedItemsRef.current.keys()) {
+                                  if (!currentIds.has(id)) {
+                                      const tracked = trackedItemsRef.current.get(id);
+                                      if (tracked && tracked.type === 'sticky_note') {
+                                          console.log('Item deselected (dropped), triggering move:', id);
+                                          itemsToMove.push({ id, type: tracked.type });
+                                      }
+                                      trackedItemsRef.current.delete(id);
+                                  }
+                              }
+
+                              if (itemsToMove.length > 0) {
+                                  await handleTaskMove(itemsToMove);
+                              }
+
+                              // Stop polling if no items selected
+                              if (currentSelection.length === 0) {
+                                  console.log('No items selected. Stopping polling loop.');
+                                  clearInterval(intervalId);
+                                  intervalId = null;
+                                  trackedItemsRef.current.clear();
+                              }
+
+                          } catch (e) {
+                              console.error('Error in polling loop:', e);
+                              // Safety stop
+                              if (intervalId) {
+                                  clearInterval(intervalId);
+                                  intervalId = null;
+                              }
+                          }
+                      }, 1000);
+                  }
+              }
+          };
+
+          // Register event listener
+          // Note: 'selection:update' fires when selection changes
+          await miroInstance.board.ui.on('selection:update', handleSelectionUpdate);
+          
+          // Initial check in case items are already selected
+          handleSelectionUpdate();
+
         } else {
           console.log('📦 Using mock mode - data stored in browser');
         }
@@ -72,7 +212,12 @@ const App: React.FC = () => {
         setLoading(false);
       }
     };
+
     init();
+
+    return () => {
+        if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   const handleSettingsUpdate = async (newSettings: Settings) => {
@@ -163,6 +308,9 @@ const App: React.FC = () => {
         )}
         <div className="menu-container">
           <h1 className="menu-title">Agile Calendar</h1>
+          <div style={{ textAlign: 'right', fontSize: '0.8em', color: '#666', marginTop: '-20px', marginBottom: '10px' }}>
+            Build: {buildInfo.buildNumber}
+          </div>
           <button className="menu-button" onClick={() => openModal('tasks')}>
             📋 タスク管理
           </button>
@@ -173,7 +321,7 @@ const App: React.FC = () => {
             👥 トラック・メンバー設定
           </button>
           <button className="menu-button" onClick={() => openModal('calendar')}>
-            📅 カレンダー生成
+            📅 カレンダー操作
           </button>
           <button className="menu-button secondary" onClick={() => openModal('settings')}>
             ⚙️ 設定

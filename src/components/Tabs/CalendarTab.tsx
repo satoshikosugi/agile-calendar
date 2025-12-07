@@ -1,10 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Settings } from '../../models/types';
-import {
-  generateCalendar,
-  navigateToPreviousMonth,
-  navigateToNextMonth,
-} from '../../services/calendarLayoutService';
+import { generateCalendar } from '../../services/calendarLayoutService';
+import { rearrangeTasksForMonth } from '../../services/tasksService';
 import './CalendarTab.css';
 
 interface CalendarTabProps {
@@ -12,123 +9,121 @@ interface CalendarTabProps {
   onSettingsUpdate: (settings: Settings) => void;
 }
 
-const CalendarTab: React.FC<CalendarTabProps> = ({ settings, onSettingsUpdate }) => {
-  const [loading, setLoading] = useState(false);
+const CalendarTab: React.FC<CalendarTabProps> = ({ settings }) => {
+  const [targetMonth, setTargetMonth] = useState(settings.baseMonth);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isRearranging, setIsRearranging] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleGenerateCalendar = async () => {
-    setLoading(true);
+    if (!targetMonth) return;
+    setIsGenerating(true);
     try {
-      await generateCalendar(settings);
-      alert('カレンダーを生成しました！');
+      await generateCalendar(targetMonth, settings);
+      alert(`${targetMonth}のカレンダーを表示しました`);
     } catch (error) {
-      console.error('Error generating calendar:', error);
-      alert('カレンダーの生成に失敗しました');
+      console.error(error);
+      alert('カレンダー生成に失敗しました');
     } finally {
-      setLoading(false);
+      setIsGenerating(false);
     }
   };
 
-  const handlePreviousMonth = async () => {
-    setLoading(true);
+  const handleRearrangeTasks = async () => {
+    if (!targetMonth) return;
+    
+    // Cancel previous if any
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+    }
+    
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    
+    setIsRearranging(true);
     try {
-      const newSettings = await navigateToPreviousMonth(settings);
-      onSettingsUpdate(newSettings);
-    } catch (error) {
-      console.error('Error navigating to previous month:', error);
-      alert('前月への移動に失敗しました');
+      await rearrangeTasksForMonth(targetMonth, controller.signal);
+      alert(`${targetMonth}のタスクを再配置しました`);
+    } catch (error: any) {
+      if (error.message === 'Operation cancelled') {
+          console.log('Rearrange cancelled');
+          alert('タスク再配置を中断しました');
+      } else {
+          console.error(error);
+          alert('タスク再配置に失敗しました: ' + error.message);
+      }
     } finally {
-      setLoading(false);
+      setIsRearranging(false);
+      abortControllerRef.current = null;
     }
   };
 
-  const handleNextMonth = async () => {
-    setLoading(true);
-    try {
-      const newSettings = await navigateToNextMonth(settings);
-      onSettingsUpdate(newSettings);
-    } catch (error) {
-      console.error('Error navigating to next month:', error);
-      alert('次月への移動に失敗しました');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formatMonth = (yearMonth: string) => {
-    const [year, month] = yearMonth.split('-');
-    return `${year}年 ${parseInt(month)}月`;
+  const handleStop = () => {
+      if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+      }
   };
 
   return (
     <div className="calendar-tab">
-      <h2>カレンダー管理</h2>
-      
-      <div className="calendar-info">
-        <p>
-          現在の基準月: <strong>{formatMonth(settings.baseMonth)}</strong>
-        </p>
-        <p>
-          カレンダーは3ヶ月表示します: {formatMonth(getPreviousMonth(settings.baseMonth))}、{' '}
-          {formatMonth(settings.baseMonth)}、{formatMonth(getNextMonth(settings.baseMonth))}
-        </p>
-      </div>
+      <h2>カレンダー操作</h2>
+      <div className="section">
+        <div className="form-group">
+          <label>対象月</label>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px' }}>
+            <input
+              type="month"
+              value={targetMonth}
+              onChange={(e) => setTargetMonth(e.target.value)}
+              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '16px' }}
+            />
+          </div>
+          
+          <div className="action-buttons" style={{ display: 'flex', gap: '15px', flexDirection: 'column' }}>
+            <div className="action-item">
+              <button 
+                className="btn btn-primary" 
+                onClick={handleGenerateCalendar}
+                disabled={isGenerating}
+                style={{ width: '100%', marginBottom: '5px' }}
+              >
+                {isGenerating ? '生成中...' : 'カレンダー生成'}
+              </button>
+              <p className="help-text" style={{ margin: '0', fontSize: '0.9em', color: '#666' }}>
+                指定した月のカレンダーフレームをMiroボード上に生成します。
+                <br />
+                ※すでにカレンダーが存在する場合は生成されません。
+              </p>
+            </div>
 
-      <div className="calendar-actions">
-        <button
-          className="btn btn-primary"
-          onClick={handleGenerateCalendar}
-          disabled={loading}
-        >
-          {loading ? '生成中...' : 'カレンダー生成/更新'}
-        </button>
-      </div>
-
-      <div className="calendar-navigation">
-        <h3>カレンダーナビゲーション</h3>
-        <div className="nav-buttons">
-          <button
-            className="btn btn-secondary"
-            onClick={handlePreviousMonth}
-            disabled={loading}
-          >
-            ← 前月
-          </button>
-          <div className="current-month">{formatMonth(settings.baseMonth)}</div>
-          <button
-            className="btn btn-secondary"
-            onClick={handleNextMonth}
-            disabled={loading}
-          >
-            次月 →
-          </button>
+            <div className="action-item">
+              {isRearranging ? (
+                  <button 
+                    className="btn btn-danger" 
+                    onClick={handleStop}
+                    style={{ width: '100%', marginBottom: '5px', backgroundColor: '#dc3545', color: 'white' }}
+                  >
+                    停止
+                  </button>
+              ) : (
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={handleRearrangeTasks}
+                    disabled={isGenerating}
+                    style={{ width: '100%', marginBottom: '5px' }}
+                  >
+                    タスク再配置
+                  </button>
+              )}
+              <p className="help-text" style={{ margin: '0', fontSize: '0.9em', color: '#666' }}>
+                指定した月のタスク配置を整理します。
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
-
-      <div className="calendar-description">
-        <h3>カレンダーについて</h3>
-        <ul>
-          <li>カレンダーはMiroボード上にフレームとして生成されます</li>
-          <li>各月は個別のフレームとして表示されます</li>
-          <li>行はPM、デザイナー、および有効なトラックを表します</li>
-          <li>タスクは適切な日付と行のセルに配置されます</li>
-          <li>ナビゲーションボタンを使用して月間を移動します</li>
-        </ul>
       </div>
     </div>
   );
 };
-
-// Helper functions
-function getPreviousMonth(yearMonth: string): string {
-  const date = new Date(yearMonth + '-01');
-  date.setMonth(date.getMonth() - 1);
-  return date.toISOString().substring(0, 7);
-}
-
-function getNextMonth(yearMonth: string): string {
-  const date = new Date(yearMonth + '-01');
-  date.setMonth(date.getMonth() + 1);
-  return date.toISOString().substring(0, 7);
-}
 
 export default CalendarTab;

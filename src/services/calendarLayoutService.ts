@@ -1,26 +1,16 @@
 import { miro } from '../miro';
 import { Settings, Task } from '../models/types';
+import { withRetry } from '../utils/retry';
 
 // Calendar layout constants
-const CALENDAR_FRAME_WIDTH = 2800;
-const CALENDAR_FRAME_HEIGHT = 2400;
-const CALENDAR_FRAME_SPACING = 300;
+const CALENDAR_FRAME_WIDTH = 5600;
+const CALENDAR_FRAME_HEIGHT = 4800;
+const CALENDAR_FRAME_SPACING = 600;
+const CALENDAR_EPOCH_YEAR = 2024; // Fixed reference year for coordinate system
 
-// Work hours configuration (in minutes from midnight)
-const WORK_DAY_START_MINUTES = 9 * 60;  // 9:00 AM
-const WORK_DAY_END_MINUTES = 18 * 60;   // 6:00 PM
-
-// Generate 3-month calendar frames on the board
-export async function generateCalendar(settings: Settings): Promise<void> {
-  const baseDate = new Date(settings.baseMonth + '-01');
-  const months: Date[] = [];
-  
-  // Generate 3 months: baseMonth-1, baseMonth, baseMonth+1
-  for (let i = -1; i <= 1; i++) {
-    const monthDate = new Date(baseDate);
-    monthDate.setMonth(baseDate.getMonth() + i);
-    months.push(monthDate);
-  }
+// Generate a single month calendar frame on the board
+export async function generateCalendar(yearMonth: string, settings: Settings): Promise<void> {
+  const monthDate = new Date(yearMonth + '-01');
   
   // New larger dimensions for monthly calendar layout
   const frameWidth = CALENDAR_FRAME_WIDTH;
@@ -29,35 +19,50 @@ export async function generateCalendar(settings: Settings): Promise<void> {
   const startX = 0;
   const startY = 0;
   
-  // Create frames for each month
-  for (let i = 0; i < months.length; i++) {
-    const monthDate = months[i];
-    const monthStr = monthDate.toISOString().substring(0, 7); // YYYY-MM
-    
-    // Check if frame already exists
-    const existingFrames = await miro.board.get({ type: 'frame' });
-    const frameExists = existingFrames.some(
-      (frame: any) => frame.title === `Calendar ${monthStr}`
-    );
-    
-    if (!frameExists) {
-      const x = startX + i * (frameWidth + frameSpacing);
-      const y = startY;
-      
-      const frame = await miro.board.createFrame({
-        title: `Calendar ${monthStr}`,
-        x,
-        y,
-        width: frameWidth,
-        height: frameHeight,
-        style: {
-          fillColor: '#ffffff',
-        },
-      });
-      
-      // Add monthly calendar structure within the frame
-      await createMonthlyCalendarGrid(frame, monthDate, settings);
-    }
+  const monthStr = yearMonth; // YYYY-MM
+  
+  // Check if frame already exists
+  const existingFrames = await withRetry<any[]>(() => miro.board.get({ type: 'frame' }));
+  const frameExists = existingFrames.some(
+    (frame: any) => frame.title === `Calendar ${monthStr}`
+  );
+  
+  if (frameExists) {
+    console.warn(`Calendar for ${monthStr} already exists.`);
+    await moveToMonth(monthStr);
+    return;
+  }
+
+  // Calculate position based on fixed epoch to ensure consistent positioning
+  // regardless of settings.baseMonth
+  const diffYear = monthDate.getFullYear() - CALENDAR_EPOCH_YEAR;
+  const diffMonth = diffYear * 12 + monthDate.getMonth(); // month is 0-11
+  
+  const x = startX + diffMonth * (frameWidth + frameSpacing);
+  const y = startY;
+  
+  const frame = await withRetry(() => miro.board.createFrame({
+    title: `Calendar ${monthStr}`,
+    x,
+    y,
+    width: frameWidth,
+    height: frameHeight,
+    style: {
+      fillColor: '#ffffff',
+    },
+  }));
+  
+  // Add monthly calendar structure within the frame
+  await createMonthlyCalendarGrid(frame, monthDate, settings);
+  
+  // Move viewport to the new calendar
+  await moveToMonth(monthStr);
+  
+  // Explicitly zoom to the new frame to ensure user sees it
+  try {
+      await miro.board.viewport.zoomToObject(frame);
+  } catch (e) {
+      console.error('Failed to zoom to frame:', e);
   }
 }
 
@@ -76,8 +81,8 @@ async function createMonthlyCalendarGrid(
   const frameHeight = frame.height;
   
   // Calendar layout constants
-  const headerHeight = 80;
-  const dayOfWeekHeaderHeight = 40;
+  const headerHeight = 160;
+  const dayOfWeekHeaderHeight = 80;
   const colWidth = frameWidth / 7; // 7 days per week
   const numWeeks = 6; // Max weeks in a month
   const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
@@ -86,19 +91,20 @@ async function createMonthlyCalendarGrid(
   const monthNameJa = ['1月', '2月', '3月', '4月', '5月', '6月',
                        '7月', '8月', '9月', '10月', '11月', '12月'];
   
-  await miro.board.createText({
+  const title = await withRetry(() => miro.board.createText({
     content: `${year}年 ${monthNameJa[month]}`,
     x: frameX,
     y: frameY - frameHeight / 2 + headerHeight / 2,
-    width: frameWidth - 40,
+    width: frameWidth - 80,
     style: {
-      fontSize: 24,
+      fontSize: 48,
       fontFamily: 'arial',
       color: '#1a1a1a',
       textAlign: 'center',
       fillColor: 'transparent',
     },
-  });
+  }));
+  await withRetry(() => frame.add(title));
   
   // Day of week headers (Sun, Mon, Tue, Wed, Thu, Fri, Sat)
   const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
@@ -109,19 +115,20 @@ async function createMonthlyCalendarGrid(
     const y = frameY - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight / 2;
     const isWeekend = weekendDays.includes(dow);
     
-    await miro.board.createText({
+    const header = await withRetry(() => miro.board.createText({
       content: daysOfWeek[dow],
       x,
       y,
-      width: colWidth - 10,
+      width: colWidth - 20,
       style: {
-        fontSize: 16,
+        fontSize: 32,
         fontFamily: 'arial',
         color: isWeekend ? '#d32f2f' : '#424242',
         textAlign: 'center',
         fillColor: 'transparent',
       },
-    });
+    }));
+    await withRetry(() => frame.add(header));
   }
   
   // Draw grid lines and day numbers
@@ -148,48 +155,67 @@ async function createMonthlyCalendarGrid(
           (week > 0 && dayCounter <= daysInMonth)) {
         
         if (dayCounter <= daysInMonth) {
-          // Draw cell border
-          await miro.board.createShape({
+          // Draw cell border (continuous grid)
+          const cellShape = await withRetry<any>(() => miro.board.createShape({
             shape: 'rectangle',
             x: cellCenterX,
             y: cellCenterY,
-            width: colWidth - 4,
-            height: rowHeight - 4,
+            width: colWidth,
+            height: rowHeight,
             style: {
-              borderColor: isWeekend ? '#ffebee' : '#e0e0e0',
-              borderWidth: 1,
+              borderColor: isWeekend ? '#ef9a9a' : '#424242', // Darker border
+              borderWidth: 4, // Thicker border
               fillColor: isWeekend ? '#fafafa' : '#ffffff',
             },
-          });
+          }));
           
-          // Day number in top-left corner of cell
-          await miro.board.createText({
-            content: `${dayCounter}`,
-            x: cellX + 25,
-            y: cellY + 20,
-            width: 40,
+          // Set metadata for click detection
+          const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${dayCounter.toString().padStart(2, '0')}`;
+          await withRetry(() => cellShape.setMetadata('appType', 'calendarCell'));
+          await withRetry(() => cellShape.setMetadata('date', dateStr));
+          
+          await withRetry(() => frame.add(cellShape));
+          
+          // Day number button
+          const dayButton = await withRetry<any>(() => miro.board.createShape({
+            shape: 'round_rectangle',
+            content: `<p><strong>${dayCounter}</strong></p>`,
+            x: cellX + 50,
+            y: cellY + 40,
+            width: 60,
+            height: 60,
             style: {
-              fontSize: 14,
+              fillColor: '#f5f5f5', // Light gray background
+              borderColor: isWeekend ? '#ef9a9a' : '#bdbdbd',
+              borderWidth: 2,
+              fontSize: 24,
               fontFamily: 'arial',
               color: isWeekend ? '#d32f2f' : '#424242',
               textAlign: 'center',
-              fillColor: 'transparent',
+              textAlignVertical: 'middle',
             },
-          });
+          }));
+          
+          // Set metadata for click detection
+          await withRetry(() => dayButton.setMetadata('appType', 'calendarCell'));
+          await withRetry(() => dayButton.setMetadata('date', dateStr));
+          
+          await withRetry(() => frame.add(dayButton));
           
           // Divider line between team tasks (left) and personal schedules (right)
           const dividerX = cellCenterX;
-          await miro.board.createShape({
+          const divider = await withRetry(() => miro.board.createShape({
             shape: 'rectangle',
             x: dividerX,
             y: cellCenterY,
-            width: 1,
-            height: rowHeight - 8,
+            width: 8, // Minimum allowed width
+            height: rowHeight - 16,
             style: {
               borderWidth: 0,
-              fillColor: '#bdbdbd',
+              fillColor: '#e0e0e0',
             },
-          });
+          }));
+          await withRetry(() => frame.add(divider));
           
           dayCounter++;
         }
@@ -200,11 +226,11 @@ async function createMonthlyCalendarGrid(
 
 // Move viewport to a specific month's calendar frame
 export async function moveToMonth(yearMonth: string): Promise<void> {
-  const frames = await miro.board.get({ type: 'frame' });
+  const frames = await withRetry<any[]>(() => miro.board.get({ type: 'frame' }));
   const targetFrame = frames.find((frame: any) => frame.title === `Calendar ${yearMonth}`);
   
   if (targetFrame) {
-    await miro.board.viewport.zoomTo(targetFrame);
+    await withRetry(() => miro.board.viewport.zoomTo(targetFrame));
   }
 }
 
@@ -217,7 +243,7 @@ export async function navigateToPreviousMonth(settings: Settings): Promise<Setti
     baseMonth: baseDate.toISOString().substring(0, 7),
   };
   
-  await generateCalendar(newSettings);
+  await generateCalendar(newSettings.baseMonth, newSettings);
   await moveToMonth(newSettings.baseMonth);
   
   return newSettings;
@@ -232,41 +258,156 @@ export async function navigateToNextMonth(settings: Settings): Promise<Settings>
     baseMonth: baseDate.toISOString().substring(0, 7),
   };
   
-  await generateCalendar(newSettings);
+  await generateCalendar(newSettings.baseMonth, newSettings);
   await moveToMonth(newSettings.baseMonth);
   
   return newSettings;
 }
 
+// Helper to find frame
+export async function getCalendarFrame(year: number, month: number): Promise<any> {
+  const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const frames = await withRetry<any[]>(() => miro.board.get({ type: 'frame' }));
+  return frames.find((f: any) => f.title === `Calendar ${monthStr}`);
+}
+
+export async function calculateTaskPositionsForDate(
+  date: string,
+  tasks: Task[]
+): Promise<Map<string, { x: number, y: number }>> {
+  // Parse date string manually to avoid timezone issues
+  const [y, m, d] = date.split('-').map(Number);
+  const year = y;
+  const month = m - 1; // 0-indexed
+  const day = d;
+
+  // 1. Find Frame
+  let frame = await getCalendarFrame(year, month);
+  
+  let frameX = 0;
+  let frameY = 0;
+  
+  if (frame) {
+    frameX = frame.x;
+    frameY = frame.y;
+  } else {
+    console.warn(`Frame for ${date} not found.`);
+    return new Map();
+  }
+
+  // 2. Calculate Cell Position
+  const frameWidth = CALENDAR_FRAME_WIDTH;
+  const frameHeight = CALENDAR_FRAME_HEIGHT;
+  
+  const headerHeight = 160;
+  const dayOfWeekHeaderHeight = 80;
+  const colWidth = frameWidth / 7;
+  const numWeeks = 6;
+  const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
+  
+  const firstDay = new Date(year, month, 1);
+  const firstDayOfWeek = firstDay.getDay();
+  const daysSinceFirstOfMonth = day - 1;
+  const totalDayOffset = firstDayOfWeek + daysSinceFirstOfMonth;
+  
+  const weekRow = Math.floor(totalDayOffset / 7);
+  const dayOfWeek = totalDayOffset % 7;
+  
+  const contentStartY = frameY - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight;
+  
+  const cellX = frameX - frameWidth / 2 + colWidth * dayOfWeek;
+  const cellY = contentStartY + rowHeight * weekRow;
+  
+  // 3. Sort Tasks
+  // Sort by time (asc), then untimed tasks at the end
+  const sortedTasks = [...tasks].sort((a, b) => {
+    const timeA = a.time?.startTime || '99:99';
+    const timeB = b.time?.startTime || '99:99';
+    return timeA.localeCompare(timeB);
+  });
+  
+  // 4. Stack Layout (5x5 Grid)
+  const positions = new Map<string, { x: number, y: number }>();
+  // const MAX_COLS = 5;
+  const ITEM_WIDTH = 140;
+  const ITEM_HEIGHT = 140; // Assumed height
+  const GAP = 10;
+  
+  // Start from top-left of the cell, below the day number
+  // cellX is left edge, cellY is top edge
+  const startX = cellX + GAP + ITEM_WIDTH / 2;
+  const startY = cellY + 80 + GAP + ITEM_HEIGHT / 2; // Skip day number area (approx 80px)
+  
+  // Divider logic:
+  // The cell is divided into Left (Team) and Right (Personal)
+  // The divider is at cellX + colWidth / 2
+  // Left area: cellX to cellX + colWidth/2
+  // Right area: cellX + colWidth/2 to cellX + colWidth
+  
+  // Calculate how many columns fit in the Left side (Team area)
+  const halfWidth = colWidth / 2;
+  const colsPerSide = Math.floor((halfWidth - GAP) / (ITEM_WIDTH + GAP)); // e.g. 2
+  
+  // Use colsPerSide as the max columns to ensure tasks stay on the left side
+  // This effectively makes the layout "Top-Left to Down" (wrapping to next row sooner)
+  // instead of crossing the divider.
+  const effectiveMaxCols = Math.max(1, colsPerSide);
+  
+  sortedTasks.forEach((task, index) => {
+    const col = index % effectiveMaxCols;
+    const row = Math.floor(index / effectiveMaxCols);
+    
+    const x = startX + col * (ITEM_WIDTH + GAP);
+    const y = startY + row * (ITEM_HEIGHT + GAP);
+    
+    positions.set(task.id, { x, y });
+  });
+  
+  return positions;
+}
+
 // Calculate position for a task on the calendar
-export function calculateTaskPosition(
+export async function calculateTaskPosition(
   task: Task, 
-  settings: Settings,
-  isPersonalSchedule: boolean = false
-): { x: number, y: number } {
+  _settings: Settings,
+  _isPersonalSchedule: boolean = false
+): Promise<{ x: number, y: number }> {
   if (!task.date) return { x: 0, y: 0 };
 
   const taskDate = new Date(task.date);
-  const baseDate = new Date(settings.baseMonth + '-01');
-  
-  // Calculate month difference to determine which frame
-  const diffYear = taskDate.getFullYear() - baseDate.getFullYear();
-  const diffMonth = diffYear * 12 + taskDate.getMonth() - baseDate.getMonth();
-  
-  // Frame constants (must match generateCalendar)
-  const frameWidth = CALENDAR_FRAME_WIDTH;
-  const frameHeight = CALENDAR_FRAME_HEIGHT;
-  const frameSpacing = CALENDAR_FRAME_SPACING;
-  const startX = 0;
-  const startY = 0;
-  
-  const frameX = startX + diffMonth * (frameWidth + frameSpacing);
-  const frameY = startY;
-  
-  // Calculate position within the monthly calendar grid
   const year = taskDate.getFullYear();
   const month = taskDate.getMonth();
   const day = taskDate.getDate();
+
+  // Try to find the actual frame on the board first
+  let frameX = 0;
+  let frameY = 0;
+  const frame = await getCalendarFrame(year, month);
+
+  if (frame) {
+    frameX = frame.x;
+    frameY = frame.y;
+  } else {
+    // Fallback to calculation based on fixed epoch
+    // Calculate month difference to determine which frame
+    const diffYear = taskDate.getFullYear() - CALENDAR_EPOCH_YEAR;
+    const diffMonth = diffYear * 12 + taskDate.getMonth();
+    
+    // Frame constants (must match generateCalendar)
+    const frameWidth = CALENDAR_FRAME_WIDTH;
+    const frameSpacing = CALENDAR_FRAME_SPACING;
+    const startX = 0;
+    const startY = 0;
+    
+    frameX = startX + diffMonth * (frameWidth + frameSpacing);
+    frameY = startY;
+  }
+  
+  // Frame constants
+  const frameWidth = CALENDAR_FRAME_WIDTH;
+  const frameHeight = CALENDAR_FRAME_HEIGHT;
+  
+  // Calculate position within the monthly calendar grid
   
   // Find which week and day of week this date is
   const firstDay = new Date(year, month, 1);
@@ -278,8 +419,8 @@ export function calculateTaskPosition(
   const dayOfWeek = totalDayOffset % 7;
   
   // Calendar layout constants (must match createMonthlyCalendarGrid)
-  const headerHeight = 80;
-  const dayOfWeekHeaderHeight = 40;
+  const headerHeight = 160;
+  const dayOfWeekHeaderHeight = 80;
   const colWidth = frameWidth / 7;
   const numWeeks = 6;
   const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
@@ -291,39 +432,246 @@ export function calculateTaskPosition(
   const cellY = contentStartY + rowHeight * weekRow;
   
   // Position within the cell
-  // Left half for team tasks, right half for personal schedules
-  const cellCenterX = cellX + colWidth / 2;
-  const cellCenterY = cellY + rowHeight / 2;
+  // Default to first slot in 5x5 grid
+  const ITEM_WIDTH = 140;
+  const ITEM_HEIGHT = 140;
+  const GAP = 10;
   
-  // Offset from center based on whether it's a team task or personal schedule
-  const horizontalOffset = isPersonalSchedule ? colWidth / 4 : -colWidth / 4;
+  // For initial placement, just put it in the first slot or calculate based on time if needed
+  // But since we have reorganizeTasksOnDate, this initial position might be temporary.
+  // However, let's try to respect the grid logic even here.
   
-  // Calculate vertical position based on time if available
-  let verticalOffset = 0;
-  if (task.time && task.time.startTime) {
-    // Validate time format (HH:MM)
-    const timeMatch = task.time.startTime.match(/^(\d{1,2}):(\d{2})$/);
-    if (timeMatch) {
-      const hours = parseInt(timeMatch[1], 10);
-      const minutes = parseInt(timeMatch[2], 10);
-      
-      if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-        const timeInMinutes = hours * 60 + minutes;
-        
-        // Map work day hours to position within cell
-        if (timeInMinutes >= WORK_DAY_START_MINUTES && timeInMinutes <= WORK_DAY_END_MINUTES) {
-          const workDayRange = WORK_DAY_END_MINUTES - WORK_DAY_START_MINUTES;
-          const normalizedTime = (timeInMinutes - WORK_DAY_START_MINUTES) / workDayRange;
-          // Use about 60% of cell height for time-based positioning, leaving room at top for day number
-          const usableHeight = rowHeight * 0.6;
-          verticalOffset = (normalizedTime - 0.5) * usableHeight + 30; // +30 to leave room for day number
-        }
-      }
-    }
-  }
+  const startGridX = cellX + GAP + ITEM_WIDTH / 2;
+  const startGridY = cellY + 80 + GAP + ITEM_HEIGHT / 2;
   
   return { 
-    x: cellCenterX + horizontalOffset,
-    y: cellCenterY + verticalOffset
+    x: startGridX,
+    y: startGridY
   };
+}
+
+// Calculate position for a personal schedule note
+export const PERSONAL_NOTE_WIDTH = 180;
+
+export async function calculatePersonalSchedulePosition(
+  dateStr: string, 
+  index: number
+): Promise<{ x: number, y: number }> {
+  const date = new Date(dateStr);
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+
+  // Try to find the actual frame on the board first
+  let frameX = 0;
+  let frameY = 0;
+  const frame = await getCalendarFrame(year, month);
+
+  if (frame) {
+    frameX = frame.x;
+    frameY = frame.y;
+  } else {
+    // Fallback to calculation based on fixed epoch
+    const diffYear = date.getFullYear() - CALENDAR_EPOCH_YEAR;
+    const diffMonth = diffYear * 12 + date.getMonth();
+    
+    const frameWidth = CALENDAR_FRAME_WIDTH;
+    const frameSpacing = CALENDAR_FRAME_SPACING;
+    const startX = 0;
+    const startY = 0;
+    
+    frameX = startX + diffMonth * (frameWidth + frameSpacing);
+    frameY = startY;
+  }
+  
+  const frameWidth = CALENDAR_FRAME_WIDTH;
+  const frameHeight = CALENDAR_FRAME_HEIGHT;
+  
+  const firstDay = new Date(year, month, 1);
+  const firstDayOfWeek = firstDay.getDay();
+  const daysSinceFirstOfMonth = day - 1;
+  const totalDayOffset = firstDayOfWeek + daysSinceFirstOfMonth;
+  
+  const weekRow = Math.floor(totalDayOffset / 7);
+  const dayOfWeek = totalDayOffset % 7;
+  
+  const headerHeight = 160;
+  const dayOfWeekHeaderHeight = 80;
+  const colWidth = frameWidth / 7;
+  const numWeeks = 6;
+  const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
+  
+  const contentStartY = frameY - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight;
+  
+  const cellX = frameX - frameWidth / 2 + colWidth * dayOfWeek;
+  const cellY = contentStartY + rowHeight * weekRow;
+  
+  // Personal area is the right half of the cell
+  const cellCenterX = cellX + colWidth / 2;
+  
+  // 2 columns layout
+  const COLUMNS = 2;
+  const GAP = 10;
+  // const NOTE_WIDTH = 180; // Defined as constant
+  const NOTE_HEIGHT = 110; // Stride height
+  
+  const col = index % COLUMNS;
+  const row = Math.floor(index / COLUMNS);
+  
+  // Calculate x position for the column
+  // Start from cellCenterX
+  const startX = cellCenterX + GAP + PERSONAL_NOTE_WIDTH / 2;
+  const x = startX + col * (PERSONAL_NOTE_WIDTH + GAP);
+  
+  const startYPos = cellY + 40; // Header offset
+  const y = startYPos + row * (NOTE_HEIGHT + GAP) + NOTE_HEIGHT / 2;
+  
+  return { x, y };
+}
+
+// Calculate date from board position (x, y)
+export async function getDateFromPosition(x: number, y: number, item?: any): Promise<string | null> {
+  // 1. Find intersecting frame
+  // We need to find which calendar frame the point belongs to
+  let frame: any = null;
+
+  // Strategy A: Check parentId (most reliable if item is attached to frame)
+  if (item && item.parentId) {
+      try {
+          const parent = await withRetry<any[]>(() => miro.board.get({ id: item.parentId }));
+          if (parent && parent.length > 0 && parent[0].type === 'frame') {
+              console.log(`Found parent frame via parentId: ${parent[0].title}`);
+              if (parent[0].title.startsWith('Calendar ')) {
+                  frame = parent[0];
+              }
+          }
+      } catch (e) {
+          console.warn('Error fetching parent frame:', e);
+      }
+  }
+
+  // Strategy B: Spatial Search (if not found via parentId)
+  if (!frame) {
+      const frames = await withRetry<any[]>(() => miro.board.get({ type: 'frame' }));
+      
+      // Debug: Log all frames found
+      console.log(`getDateFromPosition: Checking ${frames.length} frames for point (${x}, ${y})`);
+      
+      frame = frames.find((f: any) => {
+        const left = f.x - f.width / 2;
+        const right = f.x + f.width / 2;
+        const top = f.y - f.height / 2;
+        const bottom = f.y + f.height / 2;
+        
+        const isInside = x >= left && x <= right && y >= top && y <= bottom;
+        if (isInside) {
+            console.log(`Found frame match: ${f.title} [${left}, ${right}, ${top}, ${bottom}]`);
+        }
+        return isInside && f.title.startsWith('Calendar ');
+      });
+      
+      if (!frame) {
+        console.log('getDateFromPosition: No calendar frame found at', x, y);
+        // Log bounds of first few frames for debugging
+        frames.slice(0, 3).forEach((f: any) => {
+            console.log(`Frame: ${f.title}, x:${f.x}, y:${f.y}, w:${f.width}, h:${f.height}`);
+        });
+        return null;
+      }
+  }
+  
+  // 2. Parse Year/Month from title
+  const match = frame.title.match(/Calendar (\d{4})-(\d{2})/);
+  if (!match) {
+    console.log('getDateFromPosition: Invalid frame title', frame.title);
+    return null;
+  }
+  
+  const year = parseInt(match[1]);
+  const month = parseInt(match[2]) - 1; // 0-indexed
+  
+  // 3. Determine Day within Frame
+  // We use constants for layout to ensure we match the generation logic
+  const frameWidth = CALENDAR_FRAME_WIDTH;
+  const frameHeight = CALENDAR_FRAME_HEIGHT;
+  
+  const headerHeight = 160;
+  const dayOfWeekHeaderHeight = 80;
+  const colWidth = frameWidth / 7;
+  const numWeeks = 6;
+  const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
+  
+  const contentStartY = frame.y - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight;
+  
+  // Relative position in grid area
+  // Note: If item is child of frame, x/y might be relative? 
+  // Miro SDK v2 usually returns absolute coordinates even for children.
+  // But let's verify if we need to adjust.
+  
+  let calcX = x;
+  let calcY = y;
+  
+  // Determine if coordinates are relative
+  let isRelative = false;
+  
+  // 1. Explicit check: If item is child of this frame
+  if (item && item.parentId === frame.id) {
+      isRelative = true;
+      console.log('Item is child of frame. Using relative coordinates.');
+  } 
+  // 2. Heuristic check: If coordinates are "small" relative to frame position
+  // (e.g. x is 500, but frame.x is 140000)
+  // If the point is NOT inside the frame's absolute bounds, it's likely relative.
+  else {
+      const left = frame.x - frameWidth / 2;
+      const right = frame.x + frameWidth / 2;
+      const top = frame.y - frameHeight / 2;
+      const bottom = frame.y + frameHeight / 2;
+      
+      const isInsideAbsolute = x >= left && x <= right && y >= top && y <= bottom;
+      
+      if (!isInsideAbsolute) {
+           // Double check: is it "far" away?
+           if (Math.abs(x - frame.x) > frameWidth) {
+               isRelative = true;
+               console.log('Coordinates are far from frame center. Assuming relative coordinates.');
+           }
+      }
+  }
+
+  if (isRelative) {
+      // Miro SDK v2: Items inside frames use coordinates relative to the frame's top-left corner
+      calcX = (frame.x - frameWidth / 2) + x;
+      calcY = (frame.y - frameHeight / 2) + y;
+      
+      console.log(`Converted relative (${x}, ${y}) to absolute (${calcX}, ${calcY})`);
+  }
+
+  const relX = calcX - (frame.x - frameWidth / 2);
+  const relY = calcY - contentStartY;
+  
+  if (relX < 0 || relX > frameWidth || relY < 0 || relY > numWeeks * rowHeight) {
+    console.log('getDateFromPosition: Point outside grid area', relX, relY);
+    return null;
+  }
+  
+  const col = Math.floor(relX / colWidth);
+  const row = Math.floor(relY / rowHeight);
+  
+  // Calculate Date
+  const firstDay = new Date(year, month, 1);
+  const firstDayOfWeek = firstDay.getDay(); // 0 = Sunday
+  
+  // dayIndex = row * 7 + col - firstDayOfWeek + 1
+  const dayIndex = row * 7 + col - firstDayOfWeek + 1;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  
+  if (dayIndex >= 1 && dayIndex <= daysInMonth) {
+    const mStr = (month + 1).toString().padStart(2, '0');
+    const dStr = dayIndex.toString().padStart(2, '0');
+    return `${year}-${mStr}-${dStr}`;
+  }
+  
+  console.log('getDateFromPosition: Invalid day index', dayIndex);
+  return null;
 }
