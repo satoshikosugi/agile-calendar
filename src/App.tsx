@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Task } from './models/types';
+import { Settings, Task, RecurringTask } from './models/types';
 import { loadSettings, saveSettings } from './services/settingsService';
+import { applyRecurringTasks } from './services/recurringTaskService';
 import TasksTab from './components/Tabs/TasksTab';
 import CalendarTab from './components/Tabs/CalendarTab';
 import TracksTab from './components/Tabs/TracksTab';
 import SettingsTab from './components/Tabs/SettingsTab';
 import StandupTab from './components/Tabs/StandupTab';
 import TaskForm from './components/TaskForm';
+import RecurringTaskForm from './components/RecurringTaskForm';
 import { getMiro } from './miro';
 import { handleTaskMove } from './services/tasksService';
 import buildInfo from './build-info.json';
 import './App.css';
 
-type ViewMode = 'menu' | 'tasks' | 'calendar' | 'tracks' | 'settings' | 'task-form' | 'standup';
+type ViewMode = 'menu' | 'tasks' | 'calendar' | 'tracks' | 'settings' | 'task-form' | 'standup' | 'recurring-tasks';
 
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('menu');
@@ -38,6 +40,11 @@ const App: React.FC = () => {
       // Check URL parameters for view mode
       const params = new URLSearchParams(window.location.search);
       const modeParam = params.get('mode');
+      const dateParam = params.get('date');
+      
+      if (dateParam) {
+        setStandupDate(dateParam);
+      }
       
       if (modeParam === 'create' || modeParam === 'edit') {
         setViewMode('task-form');
@@ -47,7 +54,7 @@ const App: React.FC = () => {
         } else {
             setTaskFormMode('create');
         }
-      } else if (modeParam && ['tasks', 'calendar', 'tracks', 'settings', 'task-form', 'standup'].includes(modeParam)) {
+      } else if (modeParam && ['tasks', 'calendar', 'tracks', 'settings', 'task-form', 'standup', 'recurring-tasks'].includes(modeParam)) {
         setViewMode(modeParam as ViewMode);
       } else {
         setViewMode('menu');
@@ -234,6 +241,9 @@ const App: React.FC = () => {
     if (mode === 'task-form') {
         width = 400;
         height = 600;
+    } else if (mode === 'recurring-tasks') {
+        width = 600;
+        height = 800;
     } else if (mode === 'settings') {
         width = 800;
         height = 600;
@@ -293,6 +303,91 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSaveRecurringTask = async (task: RecurringTask) => {
+    if (!settings) return;
+    
+    const existingIndex = (settings.recurringTasks || []).findIndex(t => t.id === task.id);
+    let updatedRecurringTasks = [...(settings.recurringTasks || [])];
+    
+    if (existingIndex >= 0) {
+        updatedRecurringTasks[existingIndex] = task;
+    } else {
+        updatedRecurringTasks.push(task);
+    }
+
+    const newSettings = {
+      ...settings,
+      recurringTasks: updatedRecurringTasks
+    };
+    
+    try {
+      await handleSettingsUpdate(newSettings);
+      
+      // Apply recurring tasks immediately
+      const start = new Date(settings.baseMonth + '-01');
+      const months = [];
+      for (let i = 0; i < settings.viewSpanMonths; i++) {
+          const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+          months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+      await applyRecurringTasks(newSettings, months);
+
+      alert('定期タスクを保存し、カレンダーに反映しました');
+      
+      // Close modal if opened as modal, or go back to menu
+      const params = new URLSearchParams(window.location.search);
+      const initialMode = params.get('mode');
+      if (initialMode === 'recurring-tasks') {
+          const { instance } = await getMiro();
+          if (instance && instance.board && instance.board.ui) {
+              await instance.board.ui.closeModal();
+          } else {
+              window.close();
+          }
+      }
+      // Note: If not modal mode, we stay in the list view (handled by RecurringTaskForm internal state)
+      // But if we want to go back to menu, we can. 
+      // However, RecurringTaskForm now has a list view, so we probably want to stay there?
+      // The RecurringTaskForm component calls onSave then switches to list view internally.
+      // So we don't need to change viewMode here unless we want to exit the whole feature.
+    } catch (error) {
+      console.error(error);
+      alert('保存に失敗しました');
+    }
+  };
+
+  const handleReapplyRecurringTasks = async (onProgress?: (message: string) => void) => {
+      if (!settings) return;
+      try {
+          const start = new Date(settings.baseMonth + '-01');
+          const months = [];
+          for (let i = 0; i < settings.viewSpanMonths; i++) {
+              const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+              months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+          }
+          await applyRecurringTasks(settings, months, onProgress);
+          alert('定期タスクを再適用しました');
+      } catch (error) {
+          console.error(error);
+          alert('再適用に失敗しました');
+      }
+  };
+
+  const handleDeleteRecurringTask = async (taskId: string) => {
+      if (!settings) return;
+      const newSettings = {
+          ...settings,
+          recurringTasks: (settings.recurringTasks || []).filter(t => t.id !== taskId)
+      };
+      try {
+          await handleSettingsUpdate(newSettings);
+          alert('定期タスクを削除しました');
+      } catch (error) {
+          console.error(error);
+          alert('削除に失敗しました');
+      }
+  };
+
   if (loading || !settings) {
     return <div className="loading">Miro SDKを初期化中...</div>;
   }
@@ -320,6 +415,9 @@ const App: React.FC = () => {
           <button className="menu-button" onClick={() => openModal('tracks')}>
             👥 トラック・メンバー設定
           </button>
+          <button className="menu-button" onClick={() => openModal('recurring-tasks')}>
+            🔄 定期タスク登録
+          </button>
           <button className="menu-button" onClick={() => openModal('calendar')}>
             📅 カレンダー操作
           </button>
@@ -339,6 +437,15 @@ const App: React.FC = () => {
           taskId={editingTaskId} 
           mode={taskFormMode} 
           onClose={handleCloseTaskForm} 
+        />
+      )}
+      {viewMode === 'recurring-tasks' && (
+        <RecurringTaskForm 
+          settings={settings}
+          onSave={handleSaveRecurringTask} 
+          onDelete={handleDeleteRecurringTask}
+          onReapply={handleReapplyRecurringTasks}
+          onCancel={() => setViewMode('menu')} 
         />
       )}
       {viewMode === 'tasks' && (

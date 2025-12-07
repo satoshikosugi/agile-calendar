@@ -1,6 +1,8 @@
 import { RecurringRule, Settings, Task } from '../models/types';
-import { createTask } from './tasksService';
+import { createTask, reorganizeTasksOnDate } from './tasksService';
 import { getCalendarFrame } from './calendarLayoutService';
+import { miro } from '../miro';
+import { withRetry } from '../utils/retry';
 
 /**
  * Generate a list of dates (YYYY-MM-DD) based on the recurring rule within the specified month range.
@@ -10,15 +12,22 @@ import { getCalendarFrame } from './calendarLayoutService';
  */
 export function generateDatesFromRule(rule: RecurringRule, startMonth: string, endMonth: string): string[] {
   const dates: string[] = [];
-  const start = new Date(`${startMonth}-01`);
-  // End date is the last day of the end month
+  
+  // Use local time construction to avoid UTC issues
+  const [sY, sM] = startMonth.split('-').map(Number);
+  const start = new Date(sY, sM - 1, 1);
+  
   const [endY, endM] = endMonth.split('-').map(Number);
   const end = new Date(endY, endM, 0); // Last day of endMonth
 
   const current = new Date(start);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   // Helper to check if date is valid until
   const isValid = (d: Date) => {
+    // Compare timestamps to be safe
+    if (d.getTime() < today.getTime()) return false; // Don't generate tasks in the past
     if (rule.validUntil) {
       return d <= new Date(rule.validUntil);
     }
@@ -108,56 +117,79 @@ export function generateDatesFromRule(rule: RecurringRule, startMonth: string, e
  * Apply recurring tasks to the specified months.
  * @param settings Current settings containing recurring tasks
  * @param months List of months (YYYY-MM) to apply to
+ * @param onProgress Optional callback to report progress
  */
-export async function applyRecurringTasks(settings: Settings, months: string[]) {
+export async function applyRecurringTasks(
+  settings: Settings, 
+  months: string[],
+  onProgress?: (message: string) => void
+) {
   if (!settings.recurringTasks || settings.recurringTasks.length === 0) return;
 
   console.log('Applying recurring tasks for months:', months);
+  if (onProgress) onProgress('既存のタスクを確認中...');
 
   // Sort months to get range
   const sortedMonths = [...months].sort();
   const startMonth = sortedMonths[0];
   const endMonth = sortedMonths[sortedMonths.length - 1];
 
+  // Pre-fetch all sticky notes to check for duplicates globally
+  // This is safer than checking frame children, as tasks might be moved out of frames
+  const allStickyNotes = await withRetry<any[]>(() => miro.board.get({ type: 'sticky_note' }));
+  const existingTasksMap = new Map<string, any[]>(); // Key: date, Value: notes
+
+  // Build map of existing tasks by date
+  for (const note of allStickyNotes) {
+      try {
+          const metadata = await note.getMetadata('task');
+          if (metadata && metadata.date) {
+              if (!existingTasksMap.has(metadata.date)) {
+                  existingTasksMap.set(metadata.date, []);
+              }
+              existingTasksMap.get(metadata.date)?.push({ note, metadata });
+          }
+      } catch (e) {
+          // ignore
+      }
+  }
+
+  const affectedDates = new Set<string>();
+  let processedCount = 0;
+  const totalTasks = settings.recurringTasks.length;
+
   for (const recurringTask of settings.recurringTasks) {
+    processedCount++;
+    const percentage = Math.round((processedCount / totalTasks) * 100);
     const dates = generateDatesFromRule(recurringTask.rule, startMonth, endMonth);
     
     for (const date of dates) {
+      if (onProgress) {
+        onProgress(`${percentage}% [${processedCount}/${totalTasks}] ${recurringTask.template.title} (${date}) を確認中...`);
+      }
+
       // Check if calendar frame exists for this date
       const d = new Date(date);
       const frame = await getCalendarFrame(d.getFullYear(), d.getMonth());
       
       if (frame) {
-        // Check if task already exists?
-        // For now, we might duplicate if we don't check.
-        // A simple check is to look for tasks with same title on that date.
-        // But fetching all tasks is expensive.
-        // Maybe we can tag the task with recurringTaskId in metadata?
-        // Let's assume we add a property to Task metadata: recurringTaskId
-        
-        // Since we can't easily search by metadata property without fetching all,
-        // we might just create it. But user said "automatically reflect".
-        // If we run this multiple times, we get duplicates.
-        // Strategy: Search for tasks in the frame (we can get children of frame).
-        
-        const children = await frame.getChildren();
-        const existingTasks = children.filter((c: any) => c.type === 'sticky_note');
-        
+        // Check if task already exists using global map
+        const tasksOnDate = existingTasksMap.get(date) || [];
         let exists = false;
-        for (const note of existingTasks) {
-            // This is slow if we do it for every date.
-            // Optimization: We can rely on the fact that we only run this when requested.
-            // But user said "automatically reflect".
-            
-            // Let's try to read metadata if possible.
-            // Note: getChildren returns items, but metadata might need separate fetch or is included?
-            // In Miro Web SDK 2.0, items usually have metadata if fetched.
-            // But getChildren might return simplified objects.
-            // Let's assume we need to check title at least.
-            if (note.content.includes(recurringTask.template.title)) {
-                // Weak check, but better than nothing.
-                // Ideally we check metadata.
-                exists = true; 
+        
+        for (const { metadata } of tasksOnDate) {
+            // Check by recurringTaskId if available (strong check)
+            if (metadata.recurringTaskId === recurringTask.id) {
+                exists = true;
+                break;
+            }
+            // Fallback: Check by title (weak check for legacy tasks)
+            if (metadata.title === recurringTask.template.title) {
+                exists = true;
+                
+                // Self-healing: If found by title but missing recurringTaskId, update it?
+                // This would fix the "Selection" issue if we update the ID too.
+                // But updating here is complex. Let's just prevent duplicate creation.
                 break;
             }
         }
@@ -165,16 +197,62 @@ export async function applyRecurringTasks(settings: Settings, months: string[]) 
         if (!exists) {
           const newTask: Task = {
             ...recurringTask.template,
-            id: '', // Will be generated
+            id: '', // Will be generated by createTask using sticky note ID
             date: date,
-            // Add recurring info to metadata if possible (need to extend Task type or just add it)
+            recurringTaskId: recurringTask.id
           };
           
-          // We need to cast or extend Task to include recurringTaskId if we want to track it.
-          // For now, just create it.
-          await createTask(newTask);
+          try {
+            if (onProgress) {
+                onProgress(`${percentage}% [${processedCount}/${totalTasks}] ${recurringTask.template.title} (${date}) を作成中...`);
+            }
+            await createTask(newTask, { skipReorganize: true });
+            affectedDates.add(date);
+          } catch (e) {
+            console.error(`Failed to create recurring task for ${date}`, e);
+            // Continue with other tasks even if one fails
+          }
         }
       }
     }
+  }
+
+  // Batch reorganize affected dates
+  if (affectedDates.size > 0) {
+      console.log('Reorganizing affected dates:', Array.from(affectedDates));
+      if (onProgress) onProgress('タスクの配置を調整中...');
+      
+      // Fetch all notes again to include newly created ones
+      // This is necessary because createTask creates new notes that are not in our initial allStickyNotes list
+      const updatedStickyNotes = await withRetry<any[]>(() => miro.board.get({ type: 'sticky_note' }));
+      
+      // Group by date
+      const notesByDate = new Map<string, { note: any, task: Task }[]>();
+      
+      // Batch metadata fetching
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < updatedStickyNotes.length; i += BATCH_SIZE) {
+          const batch = updatedStickyNotes.slice(i, i + BATCH_SIZE);
+          await Promise.all(batch.map(async (note) => {
+              try {
+                  const metadata = await note.getMetadata('task');
+                  if (metadata && (metadata as Task).date) {
+                      const task = metadata as Task;
+                      const date = task.date;
+                      if (date) {
+                          if (!notesByDate.has(date)) {
+                              notesByDate.set(date, []);
+                          }
+                          notesByDate.get(date)!.push({ note, task });
+                      }
+                  }
+              } catch (e) { }
+          }));
+      }
+
+      for (const date of affectedDates) {
+          const notesForDate = notesByDate.get(date) || [];
+          await reorganizeTasksOnDate(date, undefined, notesForDate);
+      }
   }
 }

@@ -32,6 +32,7 @@ export interface Task {
     rolesLocked: boolean;
     externalFixed: boolean;
   };
+  recurringTaskId?: string;
 }
 
 export interface ExternalParticipant {
@@ -92,7 +93,7 @@ export interface RecurringRule {
   
   intervalMonths?: number; // Default 1
   
-  validUntil?: string; // YYYY-MM-DD
+  validUntil?: string | null; // YYYY-MM-DD
 }
 
 export interface RecurringTask {

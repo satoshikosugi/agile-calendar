@@ -429,7 +429,7 @@ export async function reorganizeTasksOnDate(
 }
 
 // Create a new task as a sticky note on the board
-export async function createTask(task: Task): Promise<Task> {
+export async function createTask(task: Task, options?: { skipReorganize?: boolean }): Promise<Task> {
   try {
     // Calculate position based on date and settings
     const settings = await loadSettings();
@@ -439,7 +439,7 @@ export async function createTask(task: Task): Promise<Task> {
     // Format sticky note content
     const content = formatTaskContent(task, settings);
 
-    const stickyNote = await withRetry(() => miro.board.createStickyNote({
+    const stickyNote = await withRetry<any>(() => miro.board.createStickyNote({
       content: content,
       x: position.x,
       y: position.y,
@@ -450,12 +450,15 @@ export async function createTask(task: Task): Promise<Task> {
       },
     }));
     
+    // Update task ID with sticky note ID
+    const taskWithId = { ...task, id: stickyNote.id };
+
     // Update properties using common helper (sets metadata, etc.)
-    await updateStickyNoteProperties(stickyNote, task, settings);
+    await updateStickyNoteProperties(stickyNote, taskWithId, settings);
     
     // Add to frame if exists (ensures visibility on top of frame)
-    if (task.date) {
-        const date = new Date(task.date);
+    if (taskWithId.date) {
+        const date = new Date(taskWithId.date);
         const frame = await getCalendarFrame(date.getFullYear(), date.getMonth());
         if (frame) {
             try {
@@ -467,11 +470,11 @@ export async function createTask(task: Task): Promise<Task> {
     }
     
     // Reorganize tasks on this date to prevent overlap
-    if (task.date) {
-      await reorganizeTasksOnDate(task.date, task);
+    if (taskWithId.date && !options?.skipReorganize) {
+      await reorganizeTasksOnDate(taskWithId.date, taskWithId);
     }
 
-    return task;
+    return taskWithId;
   } catch (error) {
     console.error('Error creating task:', error);
     throw error;
