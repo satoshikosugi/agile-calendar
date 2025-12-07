@@ -248,7 +248,8 @@ const App: React.FC = () => {
         width = 800;
         height = 600;
     } else if (mode === 'standup') {
-        width = 1200; // 1024 * 1.15 ≈ 1178 -> 1200
+        width = 1320; // Increased by 10%
+        height = 920; // Increased by 20%
     }
 
     if (instance && instance.board && instance.board.ui) {

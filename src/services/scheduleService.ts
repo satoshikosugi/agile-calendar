@@ -94,6 +94,8 @@ export const getCommonFreeSlots = (
 export interface CalendarEvent {
   id: string;
   title: string;
+  description?: string; // Raw reason or summary
+  devName?: string; // Owner name
   start: number;
   end: number;
   type: 'task' | 'personal' | 'off';
@@ -106,7 +108,11 @@ export const getDevEvents = (
   tasks: Task[],
   settings: Settings
 ): CalendarEvent[] => {
-  const events: CalendarEvent[] = [];
+  const personalEvents: CalendarEvent[] = [];
+  const taskEvents: CalendarEvent[] = [];
+  
+  const dev = settings.devs.find(d => d.id === devId);
+  const devName = dev ? dev.name : 'Unknown';
 
   // 1. Personal Schedules
   const schedules = settings.personalSchedules[devId] || [];
@@ -114,9 +120,11 @@ export const getDevEvents = (
 
   daySchedules.forEach((s, index) => {
     if (s.type === 'fullDayOff') {
-      events.push({
+      personalEvents.push({
         id: `personal-${index}`,
         title: s.reason || '休暇',
+        description: s.reason,
+        devName,
         start: WORKING_START_MIN,
         end: WORKING_END_MIN,
         type: 'off',
@@ -132,9 +140,11 @@ export const getDevEvents = (
         defaultTitle = '所用';
       }
 
-      events.push({
+      personalEvents.push({
         id: `personal-${index}`,
         title: s.reason || defaultTitle,
+        description: s.reason,
+        devName,
         start: parseTime(s.start),
         end: parseTime(s.end),
         type: 'personal',
@@ -160,13 +170,13 @@ export const getDevEvents = (
       if (task.roles.devPlan.mode === 'AllDev') {
         // Assuming AllDev includes this dev if they are a developer
         // Check if they are NOT PM and NOT Designer
-        const dev = settings.devs.find(d => d.id === devId);
+        // const dev = settings.devs.find(d => d.id === devId); // Already fetched above
         const designerRole = settings.roles.find(r => r.name.toLowerCase() === 'designer' || r.name === 'デザイナー');
         const isDesigner = designerRole && dev?.roleId === designerRole.id;
 
         if (dev && dev.roleId !== 'role-pm' && !isDesigner) isAssigned = true;
       } else if (task.roles.devPlan.mode === 'Tracks') {
-        const dev = settings.devs.find(d => d.id === devId);
+        // const dev = settings.devs.find(d => d.id === devId); // Already fetched above
         const designerRole = settings.roles.find(r => r.name.toLowerCase() === 'designer' || r.name === 'デザイナー');
         const isDesigner = designerRole && dev?.roleId === designerRole.id;
         const isDev = dev && dev.roleId !== 'role-pm' && !isDesigner;
@@ -207,9 +217,11 @@ export const getDevEvents = (
         color = '#e8f5e9'; // Green (Tracks)
       }
 
-      events.push({
+      taskEvents.push({
         id: task.id,
         title: task.title,
+        description: task.summary,
+        devName,
         start,
         end,
         type: 'task',
@@ -218,5 +230,17 @@ export const getDevEvents = (
     }
   });
 
-  return events;
+  // 3. Check overlaps for personal events
+  personalEvents.forEach(pEvent => {
+      if (pEvent.type === 'personal') {
+          const hasConflict = taskEvents.some(tEvent => {
+              return pEvent.start < tEvent.end && pEvent.end > tEvent.start;
+          });
+          if (hasConflict) {
+              pEvent.color = '#ffcdd2'; // Reddish for conflict
+          }
+      }
+  });
+
+  return [...personalEvents, ...taskEvents];
 };
