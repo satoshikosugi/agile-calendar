@@ -22,7 +22,8 @@ const getDefaultSettings = (): Settings => ({
   breakTime: {
     startTime: '12:30',
     duration: 60
-  }
+  },
+  recurringTasks: []
 });
 
 // Cache for settings shape ID to avoid repeated searches

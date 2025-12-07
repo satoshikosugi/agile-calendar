@@ -78,6 +78,29 @@ export interface PersonalSchedule {
   end?: string; // HH:MM for partial/others
 }
 
+export type RecurringFrequency = 'weekly' | 'monthly';
+
+export interface RecurringRule {
+  frequency: RecurringFrequency;
+  // Weekly options
+  weekDays?: number[]; // 0=Sun, 1=Mon, ... 6=Sat
+
+  // Monthly options
+  monthDayType?: 'startOfMonth' | 'endOfMonth' | 'specificDay';
+  weekNumber?: number; // 1-5 (for Nth weekday)
+  dayOfWeek?: number; // 0-6 (for Nth weekday)
+  
+  intervalMonths?: number; // Default 1
+  
+  validUntil?: string; // YYYY-MM-DD
+}
+
+export interface RecurringTask {
+  id: string;
+  template: Omit<Task, 'id' | 'date'>;
+  rule: RecurringRule;
+}
+
 export interface DailyTrackAssignment {
   [trackId: string]: string[]; // Dev IDs
 }
@@ -103,4 +126,5 @@ export interface Settings {
     startTime: string; // HH:MM
     duration: number; // minutes
   };
+  recurringTasks: RecurringTask[];
 }

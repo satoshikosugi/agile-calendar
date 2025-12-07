@@ -1,7 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { Settings } from '../../models/types';
+import { Settings, RecurringTask } from '../../models/types';
 import { generateCalendar } from '../../services/calendarLayoutService';
 import { rearrangeTasksForMonth } from '../../services/tasksService';
+import { applyRecurringTasks } from '../../services/recurringTaskService';
+import { saveSettings } from '../../services/settingsService';
+import RecurringTaskForm from '../RecurringTaskForm';
 import './CalendarTab.css';
 
 interface CalendarTabProps {
@@ -9,23 +12,61 @@ interface CalendarTabProps {
   onSettingsUpdate: (settings: Settings) => void;
 }
 
-const CalendarTab: React.FC<CalendarTabProps> = ({ settings }) => {
+const CalendarTab: React.FC<CalendarTabProps> = ({ settings, onSettingsUpdate }) => {
   const [targetMonth, setTargetMonth] = useState(settings.baseMonth);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRearranging, setIsRearranging] = useState(false);
+  const [showRecurringForm, setShowRecurringForm] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const getTargetMonths = () => {
+    const months: string[] = [];
+    const [year, month] = targetMonth.split('-').map(Number);
+    for (let i = 0; i < settings.viewSpanMonths; i++) {
+      const d = new Date(year, month - 1 + i, 1);
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      months.push(`${d.getFullYear()}-${m}`);
+    }
+    return months;
+  };
 
   const handleGenerateCalendar = async () => {
     if (!targetMonth) return;
     setIsGenerating(true);
     try {
       await generateCalendar(targetMonth, settings);
+      
+      // Apply recurring tasks
+      await applyRecurringTasks(settings, getTargetMonths());
+      
       alert(`${targetMonth}のカレンダーを表示しました`);
     } catch (error) {
       console.error(error);
       alert('カレンダー生成に失敗しました');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleSaveRecurringTask = async (task: RecurringTask) => {
+    const newSettings = {
+      ...settings,
+      recurringTasks: [...(settings.recurringTasks || []), task]
+    };
+    
+    try {
+      await saveSettings(newSettings);
+      onSettingsUpdate(newSettings);
+      setShowRecurringForm(false);
+      
+      // Apply to existing calendars
+      // We assume the user wants to apply to the currently selected target month range
+      await applyRecurringTasks(newSettings, getTargetMonths());
+      
+      alert('定期タスクを保存し、カレンダーに反映しました');
+    } catch (error) {
+      console.error(error);
+      alert('保存に失敗しました');
     }
   };
 
@@ -80,6 +121,27 @@ const CalendarTab: React.FC<CalendarTabProps> = ({ settings }) => {
           </div>
           
           <div className="action-buttons" style={{ display: 'flex', gap: '15px', flexDirection: 'column' }}>
+            
+            {showRecurringForm ? (
+              <RecurringTaskForm 
+                onSave={handleSaveRecurringTask} 
+                onCancel={() => setShowRecurringForm(false)} 
+              />
+            ) : (
+              <div className="action-item">
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => setShowRecurringForm(true)}
+                  style={{ width: '100%', marginBottom: '5px', backgroundColor: '#6c757d', color: 'white' }}
+                >
+                  定期タスク登録
+                </button>
+                <p className="help-text" style={{ margin: '0', fontSize: '0.9em', color: '#666' }}>
+                  毎週・毎月の定期的なタスクを登録し、カレンダーに自動反映します。
+                </p>
+              </div>
+            )}
+
             <div className="action-item">
               <button 
                 className="btn btn-primary" 
