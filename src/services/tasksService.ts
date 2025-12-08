@@ -16,7 +16,7 @@ const taskDateCache = new Map<string, string>();
 let moveDebounceTimer: any = null;
 let isProcessingMoves = false;
 const pendingMoveItems = new Map<string, any>();
-const MOVE_DEBOUNCE_MS = 2000; // Reduced to 2000ms for snappy response on drop
+const MOVE_DEBOUNCE_MS = 5000; // Reduced to 5000ms for snappy response on drop
 
 // Handle task movement on the board
 export async function handleTaskMove(items: any[]): Promise<void> {
@@ -95,6 +95,12 @@ async function processBatch(items: any[]) {
         try {
             // 1. Update all tasks and collect affected dates
             for (const item of items) {
+                // Check if this item has a newer pending move
+                if (pendingMoveItems.has(item.id)) {
+                    console.log(`Skipping task ${item.id} in current batch because a newer move is pending.`);
+                    continue;
+                }
+
                 try {
                     // Re-fetch item to ensure we have the latest metadata/methods
                     const freshItems = await withRetry<any[]>(() => miro.board.get({ id: item.id }), undefined, 'board.get(id)');
@@ -372,6 +378,31 @@ export async function reorganizeTasksOnDate(
                         const cachedDate = taskDateCache.get(task.id);
                         if (cachedDate && cachedDate !== date) return null;
 
+                        // Fix coordinates for checks
+                        let checkX = note.x;
+                        let checkY = note.y;
+                        
+                        if (note.parentId === frame.id) {
+                             checkX = frame.x + note.x;
+                             checkY = frame.y + note.y;
+                        }
+
+                        // Safety Net: If task is physically outside this frame, check if it belongs to another date
+                        // This prevents "Move back" glitches when metadata/cache is stale or task was skipped in batch
+                        const isInsideFrame = 
+                            checkX >= frame.x - frame.width / 2 && 
+                            checkX <= frame.x + frame.width / 2 &&
+                            checkY >= frame.y - frame.height / 2 &&
+                            checkY <= frame.y + frame.height / 2;
+
+                        if (!isInsideFrame) {
+                            const actualDate = await getDateFromPosition(checkX, checkY, note);
+                            if (actualDate && actualDate !== date) {
+                                console.log(`Task ${task.title} is physically at ${actualDate}, excluding from ${date} reorganization`);
+                                return null;
+                            }
+                        }
+
                         // Use updated task data if provided
                         if (updatedTask && task.id === updatedTask.id) {
                             task = updatedTask;
@@ -389,7 +420,18 @@ export async function reorganizeTasksOnDate(
                         const cachedDate = taskDateCache.get(task.id);
                         if (cachedDate && cachedDate !== date) return null;
 
-                        const calculatedDate = await getDateFromPosition(note.x, note.y, note, frame);
+                        // Fix coordinates for getDateFromPosition
+                        // frame.getChildren() returns coordinates relative to the frame center
+                        // getDateFromPosition expects absolute coordinates
+                        let checkX = note.x;
+                        let checkY = note.y;
+                        
+                        if (note.parentId === frame.id) {
+                             checkX = frame.x + note.x;
+                             checkY = frame.y + note.y;
+                        }
+
+                        const calculatedDate = await getDateFromPosition(checkX, checkY, note, frame);
                         if (calculatedDate === date) {
                             console.log(`Self-healing task ${task.title}: metadata=${task.date}, actual=${date}`);
                             // Update metadata to match reality
@@ -429,6 +471,11 @@ export async function reorganizeTasksOnDate(
     }
 
     if (dateNotes.length === 0) return;
+
+    // Sort by Y position to respect visual order (especially for tasks without time)
+    // This ensures that if the user manually rearranges tasks without time, 
+    // or drops them in a specific order, that order is preserved.
+    dateNotes.sort((a, b) => a.note.y - b.note.y);
 
     // 3. Calculate new positions
     const tasks = dateNotes.map(dn => dn.task);
