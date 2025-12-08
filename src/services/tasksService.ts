@@ -416,8 +416,22 @@ export async function reorganizeTasksOnDate(
                     
                     try {
                         await withRetry(() => note.sync());
-                    } catch (e) {
-                        console.error('Failed to sync personal note', e);
+                    } catch (e: any) {
+                        if (e.message && e.message.includes('child of another board item')) {
+                             try {
+                                 await detachFromParent(note);
+                                 
+                                 // Retry move
+                                 note.x = pos.x;
+                                 note.y = pos.y;
+                                 note.width = PERSONAL_NOTE_WIDTH;
+                                 await withRetry(() => note.sync());
+                             } catch (retryError) {
+                                 console.error('Failed to move personal note even after removing from frame', retryError);
+                             }
+                         } else {
+                            console.error('Failed to sync personal note', e);
+                         }
                     }
                 }
             }

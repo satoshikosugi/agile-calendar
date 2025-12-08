@@ -60,7 +60,7 @@ export async function generateCalendar(yearMonth: string, settings: Settings): P
   
   // Explicitly zoom to the new frame to ensure user sees it
   try {
-      await miro.board.viewport.zoomToObject(frame);
+      await miro.board.viewport.zoomTo(frame);
   } catch (e) {
       console.error('Failed to zoom to frame:', e);
   }
@@ -83,7 +83,7 @@ async function createMonthlyCalendarGrid(
   // Calendar layout constants
   const headerHeight = 160;
   const dayOfWeekHeaderHeight = 80;
-  const colWidth = frameWidth / 7; // 7 days per week
+  const colWidth = frameWidth / 8; // 8 columns (7 days + Weekly)
   const numWeeks = 6; // Max weeks in a month
   const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
   
@@ -106,14 +106,15 @@ async function createMonthlyCalendarGrid(
   }));
   await withRetry(() => frame.add(title));
   
-  // Day of week headers (Sun, Mon, Tue, Wed, Thu, Fri, Sat)
-  const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
+  // Day of week headers (Sun, Mon, Tue, Wed, Thu, Fri, Sat, Weekly)
+  const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土', 'Weekly'];
   const weekendDays = [0, 6]; // Sunday and Saturday
   
-  for (let dow = 0; dow < 7; dow++) {
+  for (let dow = 0; dow < 8; dow++) {
     const x = frameX - frameWidth / 2 + colWidth * (dow + 0.5);
     const y = frameY - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight / 2;
     const isWeekend = weekendDays.includes(dow);
+    const isWeekly = dow === 7;
     
     const header = await withRetry(() => miro.board.createText({
       content: daysOfWeek[dow],
@@ -125,7 +126,7 @@ async function createMonthlyCalendarGrid(
         fontFamily: 'arial',
         color: isWeekend ? '#d32f2f' : '#424242',
         textAlign: 'center',
-        fillColor: 'transparent',
+        fillColor: isWeekly ? '#fff9c4' : 'transparent', // Weekly header is yellow
       },
     }));
     await withRetry(() => frame.add(header));
@@ -141,15 +142,34 @@ async function createMonthlyCalendarGrid(
   // Draw cells for each day
   let dayCounter = 1;
   for (let week = 0; week < numWeeks; week++) {
-    for (let dow = 0; dow < 7; dow++) {
+    for (let dow = 0; dow < 8; dow++) {
       const cellX = frameX - frameWidth / 2 + colWidth * dow;
       const cellY = contentStartY + rowHeight * week;
       const isWeekend = weekendDays.includes(dow);
+      const isWeekly = dow === 7;
       
       // Draw cell background
       const cellCenterX = cellX + colWidth / 2;
       const cellCenterY = cellY + rowHeight / 2;
       
+      if (isWeekly) {
+        // Draw Weekly cell (just a box, no date)
+        const cellShape = await withRetry<any>(() => miro.board.createShape({
+          shape: 'rectangle',
+          x: cellCenterX,
+          y: cellCenterY,
+          width: colWidth,
+          height: rowHeight,
+          style: {
+            borderColor: '#424242',
+            borderWidth: 4,
+            fillColor: '#ffffff',
+          },
+        }));
+        await withRetry(() => frame.add(cellShape));
+        continue;
+      }
+
       // Only draw day number if this cell should have a day
       if ((week === 0 && dow >= firstDayOfWeek) || 
           (week > 0 && dayCounter <= daysInMonth)) {
@@ -301,7 +321,7 @@ export async function calculateTaskPositionsForDate(
   
   const headerHeight = 160;
   const dayOfWeekHeaderHeight = 80;
-  const colWidth = frameWidth / 7;
+  const colWidth = frameWidth / 8;
   const numWeeks = 6;
   const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
   
@@ -421,7 +441,7 @@ export async function calculateTaskPosition(
   // Calendar layout constants (must match createMonthlyCalendarGrid)
   const headerHeight = 160;
   const dayOfWeekHeaderHeight = 80;
-  const colWidth = frameWidth / 7;
+  const colWidth = frameWidth / 8;
   const numWeeks = 6;
   const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
   
@@ -497,7 +517,7 @@ export async function calculatePersonalSchedulePosition(
   
   const headerHeight = 160;
   const dayOfWeekHeaderHeight = 80;
-  const colWidth = frameWidth / 7;
+  const colWidth = frameWidth / 8;
   const numWeeks = 6;
   const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
   
