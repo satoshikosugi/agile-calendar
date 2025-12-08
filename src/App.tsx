@@ -11,6 +11,8 @@ import TaskForm from './components/TaskForm';
 import RecurringTaskForm from './components/RecurringTaskForm';
 import { getMiro } from './miro';
 import { handleTaskMove } from './services/tasksService';
+import { debugService } from './services/debugService';
+import { withRetry } from './utils/retry';
 import buildInfo from './build-info.json';
 import './App.css';
 
@@ -32,6 +34,10 @@ const App: React.FC = () => {
   
   // State for StandupTab persistence
   const [standupDate, setStandupDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [showDebug, setShowDebug] = useState(false);
+  
+  // State for selected board task
+  // const [selectedBoardTask, setSelectedBoardTask] = useState<{id: string, title: string} | null>(null);
 
   useEffect(() => {
     let intervalId: any = null;
@@ -71,10 +77,70 @@ const App: React.FC = () => {
         if (isRealMiro) {
           console.log('✅ Connected to Miro board');
           
+          // Check initial selection to see if we should open in edit mode
+          // This handles the "Click Plugin Icon while Task Selected" use case
+          try {
+              const selection = await miroInstance.board.getSelection();
+              if (selection.length === 1) {
+                  const item = selection[0];
+                  if (item.type === 'sticky_note') {
+                      const appType = await item.getMetadata('appType');
+                      if (appType === 'task') {
+                          const task = await item.getMetadata('task');
+                          if (task && task.id) {
+                              console.log('Plugin opened with task selected:', task.id);
+                              // Open modal instead of switching view
+                              await openModal('task-form');
+                              // We can't pass taskId via URL easily here without reloading, 
+                              // but the modal will check selection again or we can use a different approach.
+                              // Actually, openModal takes a URL. Let's pass the ID.
+                              const width = 400;
+                              const height = 600;
+                              await miroInstance.board.ui.openModal({
+                                  url: `${import.meta.env.BASE_URL}?mode=edit&taskId=${task.id}`,
+                                  width,
+                                  height,
+                                  fullscreen: false,
+                              });
+                              // Don't set viewMode here, as we opened a modal
+                              return; 
+                          }
+                      }
+                  }
+              }
+          } catch (e) {
+              console.warn('Error checking initial selection:', e);
+          }
+          
           // Event-driven architecture to reduce API calls
           // Only poll when items are selected
-          const handleSelectionUpdate = async () => {
-              const selection = await miroInstance.board.getSelection();
+          const handleSelectionUpdate = async (event?: any) => {
+              let selection: any[] = [];
+              
+              // Try to get selection from event first (if available and reliable)
+              if (event && event.items) {
+                  selection = event.items;
+              } else {
+                  selection = await miroInstance.board.getSelection();
+              }
+
+              // Retry logic: If selection is empty, wait a bit and try again
+              // This handles the race condition where drag-start fires event before selection is committed
+              if (selection.length === 0) {
+                  // Retry up to 3 times with increasing delays
+                  for (let i = 0; i < 3; i++) {
+                      await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
+                      selection = await miroInstance.board.getSelection();
+                      if (selection.length > 0) break;
+                  }
+              }
+              
+              // Debug log to confirm selection detection
+              if (selection.length > 0) {
+                  console.log(`Selection update: ${selection.length} items selected`);
+              } else {
+                  // console.log('Selection update: No items selected');
+              }
               
               // 1. Check for Calendar Cell Click (Immediate action)
               if (selection.length === 1) {
@@ -84,8 +150,11 @@ const App: React.FC = () => {
                           const appType = await item.getMetadata('appType');
                           if (appType === 'calendarCell') {
                               const date = await item.getMetadata('date');
-                              if (date) {
-                                  console.log('Calendar cell clicked:', date);
+                              const isDayNumber = await item.getMetadata('isDayNumber');
+                              
+                              // Only open standup if clicking the day number button
+                              if (date && isDayNumber) {
+                                  console.log('Calendar day number clicked:', date);
                                   // Open Standup Modal
                                   const width = 1200;
                                   const height = 768;
@@ -95,16 +164,43 @@ const App: React.FC = () => {
                                       height,
                                       fullscreen: false,
                                   });
-                                  
-                                  await miroInstance.board.deselect();
-                                  return; 
+                                  return;
                               }
                           }
-                      }
+                      } /* else if (item.type === 'sticky_note') {
+                          const appType = await item.getMetadata('appType');
+                          if (appType === 'task') {
+                              const task = await item.getMetadata('task');
+                              if (task && task.id) {
+                                  // Instead of setting selectedBoardTask (which shows banner),
+                                  // we can just log it. The user wants popup on CLICK, not selection.
+                                  // But Miro doesn't have a "click" event for sticky notes, only selection.
+                                  // So "Select" IS "Click".
+                                  
+                                  // The user said: "When I select a task sticky, the panel shows the edit screen".
+                                  // This implies my previous code was doing `setViewMode('task-form')` somewhere.
+                                  // But I only see `setSelectedBoardTask` here.
+                                  
+                                  // Ah, maybe they mean the "Edit" button in the banner?
+                                  // "クリックするとパネルがタスク編集画面に切り替わってしまう" -> "When I click [it], the panel switches..."
+                                  // If they click the sticky note, it gets selected.
+                                  
+                                  // If I open the modal immediately upon selection, it might be annoying if they just want to move it.
+                                  // But the user asked: "ポップアップでタスク編集画面を出して" (Show task edit screen in popup).
+                                  
+                                  // Let's keep the banner but change the button action to open modal.
+                                  setSelectedBoardTask({ id: task.id, title: task.title });
+                                  return;
+                              }
+                          }
+                      } */
                   } catch (e) {
                       console.error('Error checking metadata:', e);
                   }
               }
+              
+              // Clear selected task if not a single task selection
+              // setSelectedBoardTask(null);
 
               // 2. Manage Polling Loop for Dragging
               if (selection.length > 0) {
@@ -123,10 +219,57 @@ const App: React.FC = () => {
                           }
                       }
 
+                      // Keep track of consecutive empty selections to prevent premature stopping
+                      let emptySelectionCount = 0;
+                      let isPolling = false;
+
                       intervalId = setInterval(async () => {
+                          if (isPolling) return;
+                          isPolling = true;
                           try {
                               // Re-fetch selection to get current positions
-                              const currentSelection = await miroInstance.board.getSelection();
+                              // Use withRetry to handle Rate Limits during drag
+                              const currentSelection = await withRetry<any[]>(
+                                  () => miroInstance.board.getSelection(), 
+                                  undefined, 
+                                  'board.getSelection(poll)'
+                              );
+                              
+                              // Handle empty selection grace period
+                              if (currentSelection.length === 0) {
+                                  emptySelectionCount++;
+                                  if (emptySelectionCount < 5) { // Wait for 5 consecutive empty polls (250ms)
+                                      return;
+                                  }
+                                  // If we reached here, it's truly empty (Drop detected)
+                                  console.log('No items selected for 250ms. Processing drops and stopping loop.');
+                                  
+                                  const droppedItems: any[] = [];
+                                  for (const [id, tracked] of trackedItemsRef.current.entries()) {
+                                      if (tracked.type === 'sticky_note') {
+                                          droppedItems.push({ 
+                                              id, 
+                                              type: tracked.type,
+                                              x: tracked.x,
+                                              y: tracked.y
+                                          });
+                                      }
+                                  }
+
+                                  if (droppedItems.length > 0) {
+                                      console.log('Triggering move for dropped items:', droppedItems.length);
+                                      await handleTaskMove(droppedItems);
+                                  }
+
+                                  clearInterval(intervalId);
+                                  intervalId = null;
+                                  trackedItemsRef.current.clear();
+                                  return;
+                              }
+                              
+                              // Reset counter if we found items
+                              emptySelectionCount = 0;
+
                               const currentIds = new Set(currentSelection.map((i: any) => i.id));
                               const itemsToMove: any[] = [];
 
@@ -135,6 +278,7 @@ const App: React.FC = () => {
                                   let tracked = trackedItemsRef.current.get(item.id);
                                   if (!tracked) {
                                       // New item added to selection
+                                      console.log('Tracking new item:', item.id);
                                       tracked = { x: item.x, y: item.y, stableCount: 0, type: item.type };
                                       trackedItemsRef.current.set(item.id, tracked);
                                   } else {
@@ -142,16 +286,24 @@ const App: React.FC = () => {
                                       const dx = Math.abs(tracked.x - item.x);
                                       const dy = Math.abs(tracked.y - item.y);
                                       
-                                      if (dx < 2 && dy < 2) {
+                                      // Relaxed stability check: < 5px movement
+                                      if (dx < 5 && dy < 5) {
                                           tracked.stableCount++;
-                                          // Trigger move if stable for ~1 second
-                                          if (tracked.stableCount === 1) { // 1 * 1000ms
+                                          // Always update coordinates to ensure we have the latest position on drop
+                                          // even if the movement was small
+                                          tracked.x = item.x;
+                                          tracked.y = item.y;
+
+                                          // console.log(`Item ${item.id} stable count: ${tracked.stableCount}`);
+                                          // Trigger move if stable for ~1 second (4 * 250ms = 1000ms)
+                                          if (tracked.stableCount === 4) { 
                                               if (item.type === 'sticky_note') {
                                                   console.log('Item stable, triggering move:', item.id);
                                                   itemsToMove.push(item);
                                               }
                                           }
                                       } else {
+                                          // console.log(`Item ${item.id} moved: dx=${dx}, dy=${dy}`);
                                           tracked.x = item.x;
                                           tracked.y = item.y;
                                           tracked.stableCount = 0;
@@ -165,33 +317,39 @@ const App: React.FC = () => {
                                       const tracked = trackedItemsRef.current.get(id);
                                       if (tracked && tracked.type === 'sticky_note') {
                                           console.log('Item deselected (dropped), triggering move:', id);
-                                          itemsToMove.push({ id, type: tracked.type });
+                                          // Pass last known coordinates to ensure accurate placement
+                                          itemsToMove.push({ 
+                                              id, 
+                                              type: tracked.type,
+                                              x: tracked.x,
+                                              y: tracked.y
+                                          });
                                       }
                                       trackedItemsRef.current.delete(id);
                                   }
                               }
 
                               if (itemsToMove.length > 0) {
+                                  console.log('Calling handleTaskMove with', itemsToMove.length, 'items');
                                   await handleTaskMove(itemsToMove);
                               }
 
-                              // Stop polling if no items selected
-                              if (currentSelection.length === 0) {
-                                  console.log('No items selected. Stopping polling loop.');
-                                  clearInterval(intervalId);
-                                  intervalId = null;
-                                  trackedItemsRef.current.clear();
-                              }
+                              // Stop polling logic moved to top of loop with grace period
 
                           } catch (e) {
                               console.error('Error in polling loop:', e);
-                              // Safety stop
+                              // Only stop loop if it's a fatal error, not a transient one (retry handles rate limits)
+                              // But if withRetry failed after max retries, we should probably stop to avoid infinite loop
                               if (intervalId) {
                                   clearInterval(intervalId);
                                   intervalId = null;
                               }
+                              // Clear tracking to prevent stale state
+                              trackedItemsRef.current.clear();
+                          } finally {
+                              isPolling = false;
                           }
-                      }, 1000);
+                      }, 250); // Poll every 250ms to avoid Rate Limits
                   }
               }
           };
@@ -402,6 +560,41 @@ const App: React.FC = () => {
             ⚠️ モックモード
           </div>
         )}
+        {/* selectedBoardTask && (
+            <div className="selected-task-banner" style={{
+                backgroundColor: '#e3f2fd',
+                padding: '10px',
+                marginBottom: '15px',
+                borderRadius: '4px',
+                border: '1px solid #2196f3',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+            }}>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '10px' }}>
+                    <strong>選択中:</strong> {selectedBoardTask.title}
+                </div>
+                <button 
+                    className="btn btn-sm btn-primary"
+                    onClick={async () => {
+                        // Open in modal instead of switching view
+                        const width = 400;
+                        const height = 600;
+                        const { instance } = await getMiro();
+                        if (instance) {
+                            await instance.board.ui.openModal({
+                                url: `${import.meta.env.BASE_URL}?mode=edit&taskId=${selectedBoardTask.id}`,
+                                width,
+                                height,
+                                fullscreen: false,
+                            });
+                        }
+                    }}
+                >
+                    編集（ポップアップ）
+                </button>
+            </div>
+        ) */}
         <div className="menu-container">
           <h1 className="menu-title">Agile Calendar</h1>
           <div style={{ textAlign: 'right', fontSize: '0.8em', color: '#666', marginTop: '-20px', marginBottom: '10px' }}>
@@ -425,7 +618,26 @@ const App: React.FC = () => {
           <button className="menu-button secondary" onClick={() => openModal('settings')}>
             ⚙️ 設定
           </button>
+          <button className="menu-button secondary" onClick={() => setShowDebug(true)}>
+            🐞 デバッグ情報
+          </button>
         </div>
+        {showDebug && (
+            <div className="debug-overlay" onClick={() => setShowDebug(false)}>
+                <div className="debug-content" onClick={e => e.stopPropagation()}>
+                    <h2>API Statistics</h2>
+                    <pre>{JSON.stringify(debugService.getStats(), null, 2)}</pre>
+                    <div className="debug-actions">
+                        <button onClick={() => {
+                            navigator.clipboard.writeText(JSON.stringify(debugService.getStats(), null, 2));
+                            alert('Copied to clipboard!');
+                        }}>Copy</button>
+                        <button onClick={() => setShowDebug(false)}>Close</button>
+                        <button onClick={() => { debugService.reset(); setShowDebug(false); }}>Reset</button>
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
     );
   }

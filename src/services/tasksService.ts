@@ -4,150 +4,222 @@ import { loadSettings } from './settingsService';
 import { calculateTaskPosition, calculateTaskPositionsForDate, getCalendarFrame, calculatePersonalSchedulePosition, getDateFromPosition, PERSONAL_NOTE_WIDTH } from './calendarLayoutService';
 import { parseTime, formatTime } from './scheduleService';
 import { withRetry, sleep } from '../utils/retry';
+import { debugService } from './debugService';
 
 const TASK_METADATA_KEY = 'task';
 const PERSONAL_SCHEDULE_APP_TYPE = 'personalSchedule';
 
+// Local cache to track task dates across batches and avoid stale data issues
+const taskDateCache = new Map<string, string>();
+
 // Debounce configuration
 let moveDebounceTimer: any = null;
+let isProcessingMoves = false;
 const pendingMoveItems = new Map<string, any>();
-const MOVE_DEBOUNCE_MS = 10000; // 10 seconds delay
+const MOVE_DEBOUNCE_MS = 2000; // Reduced to 2000ms for snappy response on drop
 
 // Handle task movement on the board
 export async function handleTaskMove(items: any[]): Promise<void> {
-  console.log('handleTaskMove called with', items.length, 'items');
-  
-  // Add items to pending map
-  for (const item of items) {
-      // Only track sticky notes
-      if (item.type === 'sticky_note') {
-          pendingMoveItems.set(item.id, item);
-      }
+  debugService.startOperation('handleTaskMove');
+  try {
+    console.log('handleTaskMove called with', items.length, 'items');
+    
+    // Add items to pending map
+    for (const item of items) {
+        // Only track sticky notes
+        if (item.type === 'sticky_note') {
+            pendingMoveItems.set(item.id, item);
+        }
+    }
+
+    // If processing is already in progress, just queue and return.
+    // The processing loop will pick up the new items after the current batch.
+    if (isProcessingMoves) {
+        console.log(`Move processing in progress. Queued ${items.length} items for next batch.`);
+        return;
+    }
+
+    // Reset timer
+    if (moveDebounceTimer) {
+        clearTimeout(moveDebounceTimer);
+    }
+
+    console.log(`Queued ${pendingMoveItems.size} items for move. Waiting ${MOVE_DEBOUNCE_MS}ms...`);
+
+    moveDebounceTimer = setTimeout(async () => {
+        await processPendingMoves();
+    }, MOVE_DEBOUNCE_MS);
+  } finally {
+    debugService.endOperation();
   }
-
-  // Reset timer
-  if (moveDebounceTimer) {
-      clearTimeout(moveDebounceTimer);
-  }
-
-  console.log(`Queued ${pendingMoveItems.size} items for move. Waiting ${MOVE_DEBOUNCE_MS}ms...`);
-
-  moveDebounceTimer = setTimeout(async () => {
-      await processPendingMoves();
-  }, MOVE_DEBOUNCE_MS);
 }
 
 // Process queued moves in batch
 async function processPendingMoves() {
-    console.log('Processing pending moves...');
-    const items = Array.from(pendingMoveItems.values());
-    pendingMoveItems.clear();
-    moveDebounceTimer = null;
-
-    if (items.length === 0) return;
-
-    const affectedDates = new Set<string>();
-    const settings = await loadSettings();
-
+    if (isProcessingMoves) return;
+    isProcessingMoves = true;
+    debugService.startOperation('processPendingMoves');
+    
     try {
-        // 1. Update all tasks and collect affected dates
-        for (const item of items) {
-            try {
-                // Re-fetch item to ensure we have the latest coordinates
-                const freshItems = await withRetry<any[]>(() => miro.board.get({ id: item.id }));
-                if (!freshItems || freshItems.length === 0) continue;
-                
-                const freshItem = freshItems[0];
-                const metadata = await freshItem.getMetadata(TASK_METADATA_KEY);
-                
-                if (!metadata || !(metadata as Task).id) continue;
-                
-                const task = metadata as Task;
-                const oldDate = task.date;
-                
-                // Calculate new date based on position
-                const newDate = await getDateFromPosition(freshItem.x, freshItem.y, freshItem);
-                
-                if (newDate && newDate !== oldDate) {
-                    console.log(`Task ${task.title} moved from ${oldDate} to ${newDate}`);
-                    
-                    // Update task date
-                    const updatedTask = { ...task, date: newDate };
-                    
-                    // Update metadata directly (skip full updateTask to avoid double reorganize)
-                    await updateStickyNoteProperties(freshItem, updatedTask, settings);
-                    
-                    // CRITICAL FIX: Explicitly add to the new date's frame
-                    // This ensures reorganizeTasksOnDate finds it via frame.getChildren()
-                    const dateObj = new Date(newDate);
-                    const frame = await getCalendarFrame(dateObj.getFullYear(), dateObj.getMonth());
-                    if (frame) {
-                        await withRetry(() => frame.add(freshItem));
-                    }
+        // Loop until queue is empty
+        do {
+            console.log('Processing pending moves batch...');
+            const items = Array.from(pendingMoveItems.values());
+            pendingMoveItems.clear();
+            moveDebounceTimer = null;
 
-                    if (oldDate) affectedDates.add(oldDate);
-                    affectedDates.add(newDate);
-                }
-            } catch (e) {
-                console.error('Error processing individual item move:', e);
+            if (items.length > 0) {
+                await processBatch(items);
             }
-        }
+            
+            // If new items arrived during processing, the loop will continue
+            if (pendingMoveItems.size > 0) {
+                console.log(`Found ${pendingMoveItems.size} new items in queue. Continuing processing...`);
+            }
+        } while (pendingMoveItems.size > 0);
 
-        // 2. Prepare for reorganization
-        // Fetch all notes and group them to minimize API calls
-        // This ensures we find ALL tasks, even those not properly parented to frames
-        const allNotes = await withRetry<any[]>(() => miro.board.get({ type: 'sticky_note' }));
-        const notesByDate = new Map<string, { note: any, task: Task }[]>();
-        
-        // Batch metadata fetching
-        const BATCH_SIZE = 10;
-        for (let i = 0; i < allNotes.length; i += BATCH_SIZE) {
-            const batch = allNotes.slice(i, i + BATCH_SIZE);
-            await Promise.all(batch.map(async (note) => {
-                try {
-                    const metadata = await note.getMetadata(TASK_METADATA_KEY);
-                    if (metadata && (metadata as Task).date) {
-                        const task = metadata as Task;
-                        const date = task.date;
-                        if (date) { // Ensure date is not undefined
-                            if (!notesByDate.has(date)) {
-                                notesByDate.set(date, []);
-                            }
-                            notesByDate.get(date)!.push({ note, task });
-                        }
-                    }
-                } catch (e) { }
-            }));
-        }
-
-        // 3. Reorganize affected dates
-        console.log('Reorganizing affected dates:', Array.from(affectedDates));
-        for (const date of affectedDates) {
-            const notesForDate = notesByDate.get(date) || [];
-            await reorganizeTasksOnDate(date, undefined, notesForDate);
-            // Small delay between dates to be safe
-            await sleep(200);
-        }
     } catch (error) {
         console.error('Error in processPendingMoves:', error);
+    } finally {
+        isProcessingMoves = false;
+        debugService.endOperation();
     }
+}
+
+async function processBatch(items: any[]) {
+        const affectedDates = new Set<string>();
+        const movedItemsByDate = new Map<string, { note: any, task: Task }[]>();
+        const movedTaskIds = new Set<string>();
+        // const settings = await loadSettings(); // Unused
+
+        try {
+            // 1. Update all tasks and collect affected dates
+            for (const item of items) {
+                try {
+                    // Re-fetch item to ensure we have the latest metadata/methods
+                    const freshItems = await withRetry<any[]>(() => miro.board.get({ id: item.id }), undefined, 'board.get(id)');
+                    if (!freshItems || freshItems.length === 0) continue;
+                    
+                    const freshItem = freshItems[0];
+                    const metadata = await freshItem.getMetadata(TASK_METADATA_KEY);
+                    
+                    if (!metadata || !(metadata as Task).id) continue;
+                    
+                    const task = metadata as Task;
+                    
+                    // Use cached date if available (to handle rapid moves across batches), otherwise use metadata
+                    const cachedDate = taskDateCache.get(task.id);
+                    const oldDate = cachedDate || task.date;
+                    
+                    // Track that this task is being moved
+                    movedTaskIds.add(task.id);
+                    
+                    // Use coordinates from the event trigger (client-side) if available, otherwise fallback to server-side
+                    // This fixes the issue where board.get() returns stale coordinates during drag operations
+                    const targetX = (typeof item.x === 'number') ? item.x : freshItem.x;
+                    const targetY = (typeof item.y === 'number') ? item.y : freshItem.y;
+
+                    // FIX: Detach from parent before moving to avoid "child of another item" error
+                    // This is necessary because Miro SDK restricts moving items that are children of frames
+                    if (freshItem.parentId) {
+                        await detachFromParent(freshItem);
+                    }
+
+                    // CRITICAL FIX: Update the freshItem's coordinates to match the client-side coordinates
+                    // This prevents sync() from reverting the position to the stale server-side values
+                    freshItem.x = targetX;
+                    freshItem.y = targetY;
+
+                    // Calculate new date based on position
+                    // Pass undefined for item to force spatial search for frame, ignoring any stale parentId
+                    const newDate = await getDateFromPosition(targetX, targetY, undefined);
+                    
+                    if (newDate) {
+                        if (newDate !== oldDate) {
+                            console.log(`Task ${task.title} moved from ${oldDate} to ${newDate}`);
+                            
+                            // Update task date
+                            const updatedTask = { ...task, date: newDate };
+                            
+                            // Update cache immediately
+                            taskDateCache.set(task.id, newDate);
+                            
+                            // Update metadata only (skip full updateStickyNoteProperties to avoid double sync)
+                            // reorganizeTasksOnDate will handle the full update and sync
+                            await withRetry(() => freshItem.setMetadata(TASK_METADATA_KEY, updatedTask), undefined, 'note.setMetadata(task)');
+                            
+                            // CRITICAL FIX: Explicitly add to the new date's frame
+                            // This ensures reorganizeTasksOnDate finds it via frame.getChildren()
+                            const dateObj = new Date(newDate);
+                            const frame = await getCalendarFrame(dateObj.getFullYear(), dateObj.getMonth());
+                            if (frame) {
+                                await withRetry(() => frame.add(freshItem), undefined, 'frame.add');
+                            }
+
+                            // Track moved item
+                            if (!movedItemsByDate.has(newDate)) {
+                                movedItemsByDate.set(newDate, []);
+                            }
+                            movedItemsByDate.get(newDate)!.push({ note: freshItem, task: updatedTask });
+
+                            if (oldDate) affectedDates.add(oldDate);
+                            affectedDates.add(newDate);
+                        } else {
+                            console.log(`Task ${task.title} moved but stayed on same date ${oldDate}`);
+                            
+                            // Track moved item (even if same date, to ensure it's included in layout)
+                            if (!movedItemsByDate.has(oldDate)) {
+                                movedItemsByDate.set(oldDate, []);
+                            }
+                            movedItemsByDate.get(oldDate)!.push({ note: freshItem, task: task });
+
+                            // Still add to affected dates to ensure snapping happens
+                            affectedDates.add(oldDate);
+                        }
+                    } else {
+                        console.warn(`Could not determine date for task ${task.title} at (${targetX}, ${targetY})`);
+                    }
+                } catch (e) {
+                    console.error('Error processing individual item move:', e);
+                }
+            }
+
+            // 2. Reorganize affected dates
+            // We rely on reorganizeTasksOnDate's internal optimization (frame.getChildren)
+            // instead of fetching all notes on the board, which causes Rate Limits.
+            console.log('Reorganizing affected dates:', Array.from(affectedDates));
+            for (const date of affectedDates) {
+                // Pass undefined for preFilteredNotes to let the function fetch from frame
+                // Pass movedItemsByDate.get(date) as forceIncludedTasks
+                // Pass movedTaskIds to exclude tasks that moved to other dates
+                await reorganizeTasksOnDate(date, undefined, undefined, movedItemsByDate.get(date), movedTaskIds);
+                // Small delay between dates to be safe
+                await sleep(200);
+            }
+        } catch (error) {
+            console.error('Error in processBatch:', error);
+        }
 }
 
 // Helper to format task content
 function formatTaskContent(task: Task, settings: Settings): string {
   const lines: string[] = [];
 
-  // 1. Time Range
-  if (task.time && task.time.startTime && task.time.duration) {
-    const startMins = parseTime(task.time.startTime);
-    const endMins = startMins + task.time.duration;
-    lines.push(`${task.time.startTime}-${formatTime(endMins)}`);
-  } else if (task.time && task.time.startTime) {
-    lines.push(task.time.startTime);
-  }
-
-  // 2. Title
+  // 1. Title
   lines.push(task.title);
+
+  // 2. Time Range or Duration
+  if (task.time && task.time.startTime) {
+    if (task.time.duration) {
+        const startMins = parseTime(task.time.startTime);
+        const endMins = startMins + task.time.duration;
+        lines.push(`${task.time.startTime}-${formatTime(endMins)}`);
+    } else {
+        lines.push(task.time.startTime);
+    }
+  } else if (task.time && task.time.duration) {
+      lines.push(`${task.time.duration}min`);
+  }
 
   // 3. Participants
   const participants: string[] = [];
@@ -210,26 +282,10 @@ function formatTaskContent(task: Task, settings: Settings): string {
 }
 
 // Helper function to remove existing link indicators for a task
-async function removeExistingLinkShapes(taskId: string): Promise<void> {
-  const allShapes = await withRetry<any[]>(() => miro.board.get({ type: 'shape' }));
-  const allTexts = await withRetry<any[]>(() => miro.board.get({ type: 'text' }));
-  
-  for (const shape of allShapes) {
-    const appType = await withRetry(() => shape.getMetadata('appType'));
-    const linkedTaskId = await withRetry(() => shape.getMetadata('taskId'));
-    if (appType === 'taskLink' && linkedTaskId === taskId) {
-      await withRetry(() => miro.board.remove(shape));
-    }
-  }
-  
-  // Also remove text elements associated with the link
-  for (const text of allTexts) {
-    const appType = await withRetry(() => text.getMetadata('appType'));
-    const linkedTaskId = await withRetry(() => text.getMetadata('taskId'));
-    if (appType === 'taskLink' && linkedTaskId === taskId) {
-      await withRetry(() => miro.board.remove(text));
-    }
-  }
+async function removeExistingLinkShapes(_taskId: string): Promise<void> {
+  // Optimization: Disabled to prevent rate limits
+  // Legacy link shapes are no longer used in the new layout
+  return;
 }
 
 // Helper to update all properties of a sticky note based on a task
@@ -245,11 +301,11 @@ async function updateStickyNoteProperties(note: any, task: Task, settings: Setti
   
   // 3. Update Metadata
   const cleanTask = JSON.parse(JSON.stringify(task));
-  await withRetry(() => note.setMetadata(TASK_METADATA_KEY, cleanTask));
-  await withRetry(() => note.setMetadata('appType', 'task'));
+  await withRetry(() => note.setMetadata(TASK_METADATA_KEY, cleanTask), undefined, 'note.setMetadata(task)');
+  await withRetry(() => note.setMetadata('appType', 'task'), undefined, 'note.setMetadata(appType)');
 
   // 4. Sync changes
-  await withRetry(() => note.sync());
+  await withRetry(() => note.sync(), undefined, 'note.sync(update)');
 
   // 5. Remove legacy link shapes (unless skipped)
   if (!skipLinkCleanup) {
@@ -261,12 +317,14 @@ async function updateStickyNoteProperties(note: any, task: Task, settings: Setti
 async function detachFromParent(note: any, signal?: AbortSignal) {
     if (note.parentId) {
         try {
-            const parentItems = await withRetry<any[]>(() => miro.board.get({ id: note.parentId }), signal);
+            const parentItems = await withRetry<any[]>(() => miro.board.get({ id: note.parentId }), signal, 'board.get(parentId)');
             if (parentItems && parentItems.length > 0) {
                 const parent = parentItems[0];
                 // Check if parent has remove method (Frame usually does)
                 if (parent.remove) {
-                    await withRetry(() => parent.remove(note), signal);
+                    await withRetry(() => parent.remove(note), signal, 'parent.remove');
+                    // Update local state if possible
+                    try { note.parentId = null; } catch(e) {}
                 }
             }
         } catch (e) {
@@ -279,41 +337,92 @@ async function detachFromParent(note: any, signal?: AbortSignal) {
 export async function reorganizeTasksOnDate(
   date: string, 
   updatedTask?: Task, 
-  preFilteredNotes?: { note: any, task: Task }[]
+  preFilteredNotes?: { note: any, task: Task }[],
+  forceIncludedTasks?: { note: any, task: Task }[],
+  excludeTaskIds?: Set<string>
 ): Promise<void> {
+  debugService.startOperation('reorganizeTasksOnDate');
   try {
     let dateNotes: { note: any, task: Task }[] = [];
 
     if (preFilteredNotes) {
         dateNotes = preFilteredNotes;
     } else {
-        // Fallback: Global search to ensure we don't miss any tasks (even if not properly parented)
-        // We avoid frame.getChildren() because it might miss items that are visually on the frame but not structurally children
-        const stickyNotes = await withRetry<any[]>(() => miro.board.get({ type: 'sticky_note' }));
+        // Optimization: Use Frame search instead of global board search
+        const dateObj = new Date(date);
+        const frame = await getCalendarFrame(dateObj.getFullYear(), dateObj.getMonth());
         
-        // Fetch metadata in parallel
-        const BATCH_SIZE = 10;
-        for (let i = 0; i < stickyNotes.length; i += BATCH_SIZE) {
-            const batch = stickyNotes.slice(i, i + BATCH_SIZE);
-            const results = await Promise.all(batch.map(async (note) => {
+        if (frame) {
+            // Get all children of the frame
+            const children = await withRetry<any[]>(() => frame.getChildren(), undefined, 'frame.getChildren');
+            const stickyNotes = children.filter((item: any) => item.type === 'sticky_note');
+            
+            // Process only these notes
+            const results = await Promise.all(stickyNotes.map(async (note: any) => {
                 try {
                     const metadata = await note.getMetadata(TASK_METADATA_KEY);
-                    return { note, metadata };
-                } catch (e) {
-                    return { note, metadata: null };
-                }
+                    let task = metadata as Task;
+                    
+                    // Check if metadata matches date
+                    if (task && task.date === date) {
+                        // Exclude if requested (e.g. task moved to another date but still in this frame's children)
+                        if (excludeTaskIds && excludeTaskIds.has(task.id)) return null;
+                        
+                        // Check cache: if cache says task is elsewhere, exclude it (trust cache over stale metadata/frame)
+                        const cachedDate = taskDateCache.get(task.id);
+                        if (cachedDate && cachedDate !== date) return null;
+
+                        // Use updated task data if provided
+                        if (updatedTask && task.id === updatedTask.id) {
+                            task = updatedTask;
+                        }
+                        return { note, task };
+                    }
+                    
+                    // Self-Healing: If metadata mismatch, check spatial position
+                    // This fixes "internal date vs actual position" sync issues
+                    if (task) {
+                        // Exclude if requested
+                        if (excludeTaskIds && excludeTaskIds.has(task.id)) return null;
+                        
+                        // Check cache: if cache says task is elsewhere, exclude it
+                        const cachedDate = taskDateCache.get(task.id);
+                        if (cachedDate && cachedDate !== date) return null;
+
+                        const calculatedDate = await getDateFromPosition(note.x, note.y, note, frame);
+                        if (calculatedDate === date) {
+                            console.log(`Self-healing task ${task.title}: metadata=${task.date}, actual=${date}`);
+                            // Update metadata to match reality
+                            task.date = date;
+                            // We don't await this to speed up, it will be synced in updateStickyNoteProperties later
+                            // But we need to ensure the task object we return has the correct date
+                            return { note, task };
+                        }
+                    }
+                } catch (e) { }
+                return null;
             }));
+            
+            dateNotes = results.filter((item): item is { note: any, task: Task } => item !== null);
+        } else {
+            // Fallback if frame not found (should not happen in new layout)
+            console.warn(`Frame not found for date ${date}, skipping reorganize`);
+            return;
+        }
+    }
 
-            for (const { note, metadata } of results) {
-                let task = metadata as Task;
-
-                // Use updated task data if provided
-                if (updatedTask && task && task.id === updatedTask.id) {
-                    task = updatedTask;
-                }
-
-                if (task && task.date === date) {
-                    dateNotes.push({ note, task });
+    // Merge forceIncludedTasks (deduplicating by ID)
+    if (forceIncludedTasks && forceIncludedTasks.length > 0) {
+        const existingIds = new Set(dateNotes.map(dn => dn.task.id));
+        for (const item of forceIncludedTasks) {
+            if (!existingIds.has(item.task.id)) {
+                dateNotes.push(item);
+                existingIds.add(item.task.id);
+            } else {
+                // If it exists, replace it with the forced one (it's newer)
+                const index = dateNotes.findIndex(dn => dn.task.id === item.task.id);
+                if (index !== -1) {
+                    dateNotes[index] = item;
                 }
             }
         }
@@ -337,18 +446,6 @@ export async function reorganizeTasksOnDate(
         // Update all properties (content, color, url, metadata)
         await updateStickyNoteProperties(note, task, settings);
 
-        // Try to add to frame FIRST (Z-order / Reparenting)
-        if (frame) {
-            try {
-                // Only add if not already a child (optimization)
-                if (note.parentId !== frame.id) {
-                    await withRetry(() => frame.add(note));
-                }
-            } catch (e) {
-                // Ignore if fails
-            }
-        }
-
         // Only update if position changed significantly
         if (Math.abs(note.x - pos.x) > 1 || Math.abs(note.y - pos.y) > 1) {
           // If note is already in a frame (has parentId), we might need to remove it first
@@ -356,17 +453,23 @@ export async function reorganizeTasksOnDate(
           try {
              note.x = pos.x;
              note.y = pos.y;
-             await withRetry(() => note.sync());
+             await withRetry(() => note.sync(), undefined, 'note.sync');
           } catch (e: any) {
              // If error is about child item, try to remove from parent first
              if (e.message && e.message.includes('child of another board item')) {
                  try {
+                     // 1. Try to detach using note.parentId (if valid)
                      await detachFromParent(note);
+                     
+                     // 2. If we have the target frame, try to remove from it too (just in case note.parentId is stale)
+                     if (frame) {
+                         try { await withRetry(() => frame.remove(note), undefined, 'frame.remove(fallback)'); } catch(e){}
+                     }
                      
                      // Retry move
                      note.x = pos.x;
                      note.y = pos.y;
-                     await withRetry(() => note.sync());
+                     await withRetry(() => note.sync(), undefined, 'note.sync(retry)');
                  } catch (retryError) {
                      console.error('Failed to move task even after removing from frame', retryError);
                  }
@@ -374,6 +477,15 @@ export async function reorganizeTasksOnDate(
                  throw e;
              }
           }
+        }
+
+        // Finally, ensure it is in the frame
+        if (frame) {
+             try {
+                 // We can't easily check note.parentId here if it's stale.
+                 // But frame.add is idempotent-ish (if already child, does nothing or moves it to top).
+                 await withRetry(() => frame.add(note), undefined, 'frame.add');
+             } catch (e) {}
         }
       }
     }
@@ -415,7 +527,7 @@ export async function reorganizeTasksOnDate(
                     note.width = PERSONAL_NOTE_WIDTH;
                     
                     try {
-                        await withRetry(() => note.sync());
+                        await withRetry(() => note.sync(), undefined, 'personalNote.sync');
                     } catch (e: any) {
                         if (e.message && e.message.includes('child of another board item')) {
                              try {
@@ -425,7 +537,7 @@ export async function reorganizeTasksOnDate(
                                  note.x = pos.x;
                                  note.y = pos.y;
                                  note.width = PERSONAL_NOTE_WIDTH;
-                                 await withRetry(() => note.sync());
+                                 await withRetry(() => note.sync(), undefined, 'personalNote.sync(retry)');
                              } catch (retryError) {
                                  console.error('Failed to move personal note even after removing from frame', retryError);
                              }
@@ -439,6 +551,8 @@ export async function reorganizeTasksOnDate(
     }
   } catch (error) {
     console.error('Error reorganizing tasks:', error);
+  } finally {
+    debugService.endOperation();
   }
 }
 
@@ -462,7 +576,7 @@ export async function createTask(task: Task, options?: { skipReorganize?: boolea
         fillColor: getTaskColor(task),
         fontSize: 14,
       },
-    }));
+    }), undefined, 'board.createStickyNote');
     
     // Update task ID with sticky note ID
     const taskWithId = { ...task, id: stickyNote.id };
@@ -476,7 +590,7 @@ export async function createTask(task: Task, options?: { skipReorganize?: boolea
         const frame = await getCalendarFrame(date.getFullYear(), date.getMonth());
         if (frame) {
             try {
-                await withRetry(() => frame.add(stickyNote));
+                await withRetry(() => frame.add(stickyNote), undefined, 'frame.add(new)');
             } catch (e) {
                 console.warn('Failed to add task to frame', e);
             }
@@ -515,21 +629,32 @@ function getTaskColor(task: Task): string {
 // Load all tasks from the board
 export async function loadTasks(): Promise<Task[]> {
   try {
-    const stickyNotes = await withRetry<any[]>(() => miro.board.get({ type: 'sticky_note' }));
+    const stickyNotes = await withRetry<any[]>(() => miro.board.get({ type: 'sticky_note' }), undefined, 'board.get(sticky_note)');
     const tasks: Task[] = [];
     
     for (const note of stickyNotes) {
-      const appType = await withRetry(() => note.getMetadata('appType'));
+      const appType = await withRetry(() => note.getMetadata('appType'), undefined, 'note.getMetadata(appType)');
       if (appType === 'task') {
-        const metadata = await withRetry(() => note.getMetadata(TASK_METADATA_KEY));
+        const metadata = await withRetry(() => note.getMetadata(TASK_METADATA_KEY), undefined, 'note.getMetadata(task)');
         if (metadata) {
-          tasks.push(metadata as Task);
+          const task = metadata as Task;
+          // Self-healing: Ensure task ID matches note ID
+          if (task.id !== note.id) {
+             // console.warn(`Task ID mismatch: metadata=${task.id}, note=${note.id}. Using note ID.`);
+             task.id = note.id;
+          }
+          tasks.push(task);
         }
       } else {
         // Fallback for backward compatibility or if appType wasn't set but TASK_METADATA_KEY exists
-        const metadata = await withRetry(() => note.getMetadata(TASK_METADATA_KEY));
+        const metadata = await withRetry(() => note.getMetadata(TASK_METADATA_KEY), undefined, 'note.getMetadata(task)');
         if (metadata) {
-           tasks.push(metadata as Task);
+           const task = metadata as Task;
+           // Self-healing: Ensure task ID matches note ID
+           if (task.id !== note.id) {
+              task.id = note.id;
+           }
+           tasks.push(task);
         }
       }
     }
@@ -544,16 +669,58 @@ export async function loadTasks(): Promise<Task[]> {
 // Update an existing task
 export async function updateTask(task: Task, providedSettings?: Settings): Promise<void> {
   try {
-    const stickyNotes = await withRetry<any[]>(() => miro.board.get({ type: 'sticky_note' }));
+    let note: any = null;
+    let oldTask: Task | null = null;
+
+    // 1. Try to get by ID (Fastest)
+    try {
+        // Check if ID looks valid (Miro IDs are usually numeric strings)
+        // If it starts with 'task-', it's a temp ID and we should skip direct get
+        if (!task.id.startsWith('task-')) {
+            const items = await withRetry<any[]>(() => miro.board.get({ id: task.id }), undefined, 'board.get(id)');
+            if (items && items.length > 0) {
+                note = items[0];
+                const metadata = await withRetry(() => note.getMetadata(TASK_METADATA_KEY), undefined, 'note.getMetadata(task)');
+                if (metadata) {
+                    oldTask = metadata as Task;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn(`Failed to get task by ID ${task.id}, falling back to search`, e);
+    }
+
+    // 2. Fallback: Search by metadata (Slow but robust)
+    if (!note) {
+        console.log(`Task ${task.id} not found by ID, searching all sticky notes...`);
+        const allNotes = await withRetry<any[]>(() => miro.board.get({ type: 'sticky_note' }), undefined, 'board.get(sticky_note)');
+        for (const n of allNotes) {
+            try {
+                const metadata = await n.getMetadata(TASK_METADATA_KEY);
+                if (metadata && (metadata as Task).id === task.id) {
+                    note = n;
+                    oldTask = metadata as Task;
+                    console.log(`Found task ${task.id} on note ${note.id}`);
+                    break;
+                }
+            } catch (e) {}
+        }
+    }
     
-    for (const note of stickyNotes) {
-      const metadata = await withRetry(() => note.getMetadata(TASK_METADATA_KEY));
-      if (metadata && (metadata as Task).id === task.id) {
-        const oldTask = metadata as Task;
-        
+    if (note && oldTask) {
         // Update all properties using common helper
         const settings = providedSettings || await loadSettings();
         await updateStickyNoteProperties(note, task, settings);
+        
+        // CRITICAL FIX: If date changed, move to new frame immediately
+        // This ensures reorganizeTasksOnDate finds it via frame.getChildren()
+        if (task.date && oldTask.date !== task.date) {
+             const dateObj = new Date(task.date);
+             const newFrame = await getCalendarFrame(dateObj.getFullYear(), dateObj.getMonth());
+             if (newFrame) {
+                 await withRetry(() => newFrame.add(note), undefined, 'frame.add(new)');
+             }
+        }
         
         // Reorganize tasks on this date to prevent overlap
         // Also reorganize old date if date changed
@@ -565,7 +732,6 @@ export async function updateTask(task: Task, providedSettings?: Settings): Promi
         }
         
         return;
-      }
     }
     
     throw new Error(`Task with id ${task.id} not found`);
@@ -611,12 +777,39 @@ export async function deleteTask(taskId: string): Promise<void> {
 // Get a single task by ID
 export async function getTask(taskId: string): Promise<Task | null> {
   try {
-    const stickyNotes = await miro.board.get({ type: 'sticky_note' });
+    // 1. Try direct ID access first (Fastest)
+    if (!taskId.startsWith('task-')) {
+        try {
+            const items = await withRetry<any[]>(() => miro.board.get({ id: taskId }), undefined, 'board.get(id)');
+            if (items && items.length > 0) {
+                const note = items[0];
+                const metadata = await withRetry(() => note.getMetadata(TASK_METADATA_KEY), undefined, 'note.getMetadata(task)');
+                if (metadata) {
+                    const task = metadata as Task;
+                    // Self-healing
+                    if (task.id !== note.id) {
+                        task.id = note.id;
+                    }
+                    return task;
+                }
+            }
+        } catch (e) {
+            console.warn(`Failed to get task by ID ${taskId}, falling back to search`, e);
+        }
+    }
+
+    // 2. Fallback: Search all notes
+    const stickyNotes = await withRetry<any[]>(() => miro.board.get({ type: 'sticky_note' }), undefined, 'board.get(sticky_note)');
     
     for (const note of stickyNotes) {
-      const metadata = await note.getMetadata(TASK_METADATA_KEY);
+      const metadata = await withRetry(() => note.getMetadata(TASK_METADATA_KEY), undefined, 'note.getMetadata(task)');
       if (metadata && (metadata as Task).id === taskId) {
-        return metadata as Task;
+        const task = metadata as Task;
+        // Self-healing
+        if (task.id !== note.id) {
+            task.id = note.id;
+        }
+        return task;
       }
     }
     
