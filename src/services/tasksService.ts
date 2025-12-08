@@ -200,8 +200,9 @@ async function processBatch(items: any[]) {
             // 日付ごとに再編成処理をシリアライズして競合を防ぐ
             for (const date of affectedDates) {
                 // この日付が既に処理中の場合は待機
+                // Promise-based待機でCPU消費を削減
                 while (processingDates.has(date)) {
-                    await sleep(100);
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
                 
                 try {
@@ -444,9 +445,11 @@ export async function reorganizeTasksOnDate(
                         const cachedDate = taskDateCache.get(task.id);
                         if (cachedDate && cachedDate !== date) return null;
 
-                        // 座標から計算した日付が一致する場合
-                        // 高コストのため、実際には非同期チェックをスキップし、内部境界チェックを信頼
-                        // ここでは単純に不一致として扱い、除外
+                        // パフォーマンスのトレードオフ: 空間位置の検証をスキップ
+                        // 理由: getDateFromPositionは高コスト（フレーム検索とメタデータ取得）
+                        // 代替策: フレームの境界チェック（上記のisInsideFrame）とキャッシュに依存
+                        // リスク: メタデータとキャッシュの両方が古い場合、不整合の可能性
+                        // 緩和策: processBatch内でのexplicitなframe.add()呼び出しが整合性を保証
                         console.log(`タスク${task.title}のメタデータ不一致: metadata=${task.date}, expected=${date}のため除外`);
                         return null;
                     }

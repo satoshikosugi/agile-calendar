@@ -11,6 +11,25 @@ const CALENDAR_EPOCH_YEAR = 2024; // 座標系の固定基準年
 // フレームキャッシュ（API呼び出しを削減）
 const frameCache = new Map<string, { frame: any, timestamp: number }>();
 const FRAME_CACHE_TTL = 5000; // 5秒間キャッシュ
+const MAX_CACHE_SIZE = 50; // 最大キャッシュサイズ
+
+// キャッシュクリーンアップ関数
+function cleanupFrameCache() {
+  const now = Date.now();
+  for (const [key, value] of frameCache.entries()) {
+    if (now - value.timestamp > FRAME_CACHE_TTL) {
+      frameCache.delete(key);
+    }
+  }
+  // サイズ制限も適用
+  if (frameCache.size > MAX_CACHE_SIZE) {
+    const sortedEntries = Array.from(frameCache.entries())
+      .sort((a, b) => a[1].timestamp - b[1].timestamp);
+    // 古いエントリーを削除
+    const toDelete = sortedEntries.slice(0, frameCache.size - MAX_CACHE_SIZE);
+    toDelete.forEach(([key]) => frameCache.delete(key));
+  }
+}
 
 // ボード上に単一月のカレンダーフレームを生成
 export async function generateCalendar(yearMonth: string, settings: Settings): Promise<void> {
@@ -309,6 +328,11 @@ export async function navigateToNextMonth(settings: Settings): Promise<Settings>
 export async function getCalendarFrame(year: number, month: number): Promise<any> {
   const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
   const cacheKey = `Calendar ${monthStr}`;
+  
+  // 定期的にキャッシュをクリーンアップ
+  if (Math.random() < 0.1) { // 10%の確率でクリーンアップ
+    cleanupFrameCache();
+  }
   
   // キャッシュを確認
   const cached = frameCache.get(cacheKey);
