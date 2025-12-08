@@ -43,7 +43,7 @@ const App: React.FC = () => {
     let intervalId: any = null;
 
     const init = async () => {
-      // Check URL parameters for view mode
+      // ビューモードのURLパラメータを確認
       const params = new URLSearchParams(window.location.search);
       const modeParam = params.get('mode');
       const dateParam = params.get('date');
@@ -67,18 +67,18 @@ const App: React.FC = () => {
       }
 
       try {
-        // Initialize Miro SDK first
+        // まずMiro SDKを初期化
         const { instance: miroInstance } = await getMiro();
         
-        // Check if we're using real Miro or mock
+        // 実際のMiroを使用しているかモックかを確認
         const isRealMiro = miroInstance && typeof miroInstance.board?.getInfo === 'function';
         setMiroReady(isRealMiro);
         
         if (isRealMiro) {
-          console.log('✅ Connected to Miro board');
+          console.log('✅ Miroボードに接続しました');
           
-          // Check initial selection to see if we should open in edit mode
-          // This handles the "Click Plugin Icon while Task Selected" use case
+          // 初期選択を確認して編集モードで開くべきかチェック
+          // これは「タスク選択中にプラグインアイコンをクリック」のユースケースを処理する
           try {
               const selection = await miroInstance.board.getSelection();
               if (selection.length === 1) {
@@ -88,12 +88,12 @@ const App: React.FC = () => {
                       if (appType === 'task') {
                           const task = await item.getMetadata('task');
                           if (task && task.id) {
-                              console.log('Plugin opened with task selected:', task.id);
-                              // Open modal instead of switching view
+                              console.log('タスクが選択された状態でプラグインが開かれました:', task.id);
+                              // ビューを切り替える代わりにモーダルを開く
                               await openModal('task-form');
-                              // We can't pass taskId via URL easily here without reloading, 
-                              // but the modal will check selection again or we can use a different approach.
-                              // Actually, openModal takes a URL. Let's pass the ID.
+                              // リロードせずにURLでtaskIdを渡すのは難しいが、
+                              // モーダルが再度選択を確認するか、別のアプローチを使用できる
+                              // 実際には、openModalはURLを受け取るので、IDを渡す
                               const width = 400;
                               const height = 600;
                               await miroInstance.board.ui.openModal({
@@ -102,32 +102,32 @@ const App: React.FC = () => {
                                   height,
                                   fullscreen: false,
                               });
-                              // Don't set viewMode here, as we opened a modal
+                              // モーダルを開いたのでviewModeは設定しない
                               return; 
                           }
                       }
                   }
               }
           } catch (e) {
-              console.warn('Error checking initial selection:', e);
+              console.warn('初期選択の確認中にエラーが発生しました:', e);
           }
           
-          // Event-driven architecture to reduce API calls
-          // Only poll when items are selected
+          // API呼び出しを削減するためのイベント駆動アーキテクチャ
+          // アイテムが選択されているときのみポーリング
           const handleSelectionUpdate = async (event?: any) => {
               let selection: any[] = [];
               
-              // Try to get selection from event first (if available and reliable)
+              // 最初にイベントから選択を取得する（利用可能で信頼できる場合）
               if (event && event.items) {
                   selection = event.items;
               } else {
                   selection = await miroInstance.board.getSelection();
               }
 
-              // Retry logic: If selection is empty, wait a bit and try again
-              // This handles the race condition where drag-start fires event before selection is committed
+              // リトライロジック: 選択が空の場合、少し待って再試行
+              // これはドラッグ開始イベントが選択がコミットされる前に発火する競合状態を処理する
               if (selection.length === 0) {
-                  // Retry up to 3 times with increasing delays
+                  // 遅延を増やしながら最大3回再試行
                   for (let i = 0; i < 3; i++) {
                       await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
                       selection = await miroInstance.board.getSelection();
@@ -135,14 +135,14 @@ const App: React.FC = () => {
                   }
               }
               
-              // Debug log to confirm selection detection
+              // 選択検出を確認するためのデバッグログ
               if (selection.length > 0) {
-                  console.log(`Selection update: ${selection.length} items selected`);
+                  console.log(`選択更新: ${selection.length}個のアイテムが選択されました`);
               } else {
-                  // console.log('Selection update: No items selected');
+                  // console.log('選択更新: アイテムが選択されていません');
               }
               
-              // 1. Check for Calendar Cell Click (Immediate action)
+              // 1. カレンダーセルのクリックを確認（即座のアクション）
               if (selection.length === 1) {
                   const item = selection[0];
                   try {
@@ -152,10 +152,10 @@ const App: React.FC = () => {
                               const date = await item.getMetadata('date');
                               const isDayNumber = await item.getMetadata('isDayNumber');
                               
-                              // Only open standup if clicking the day number button
+                              // 日付番号ボタンをクリックした場合のみスタンドアップを開く
                               if (date && isDayNumber) {
-                                  console.log('Calendar day number clicked:', date);
-                                  // Open Standup Modal
+                                  console.log('カレンダーの日付番号がクリックされました:', date);
+                                  // スタンドアップモーダルを開く
                                   const width = 1200;
                                   const height = 768;
                                   await miroInstance.board.ui.openModal({
@@ -167,47 +167,18 @@ const App: React.FC = () => {
                                   return;
                               }
                           }
-                      } /* else if (item.type === 'sticky_note') {
-                          const appType = await item.getMetadata('appType');
-                          if (appType === 'task') {
-                              const task = await item.getMetadata('task');
-                              if (task && task.id) {
-                                  // Instead of setting selectedBoardTask (which shows banner),
-                                  // we can just log it. The user wants popup on CLICK, not selection.
-                                  // But Miro doesn't have a "click" event for sticky notes, only selection.
-                                  // So "Select" IS "Click".
-                                  
-                                  // The user said: "When I select a task sticky, the panel shows the edit screen".
-                                  // This implies my previous code was doing `setViewMode('task-form')` somewhere.
-                                  // But I only see `setSelectedBoardTask` here.
-                                  
-                                  // Ah, maybe they mean the "Edit" button in the banner?
-                                  // "クリックするとパネルがタスク編集画面に切り替わってしまう" -> "When I click [it], the panel switches..."
-                                  // If they click the sticky note, it gets selected.
-                                  
-                                  // If I open the modal immediately upon selection, it might be annoying if they just want to move it.
-                                  // But the user asked: "ポップアップでタスク編集画面を出して" (Show task edit screen in popup).
-                                  
-                                  // Let's keep the banner but change the button action to open modal.
-                                  setSelectedBoardTask({ id: task.id, title: task.title });
-                                  return;
-                              }
-                          }
-                      } */
+                      }
                   } catch (e) {
-                      console.error('Error checking metadata:', e);
+                      console.error('メタデータの確認中にエラーが発生しました:', e);
                   }
               }
               
-              // Clear selected task if not a single task selection
-              // setSelectedBoardTask(null);
-
-              // 2. Manage Polling Loop for Dragging
+              // 2. ドラッグのためのポーリングループを管理
               if (selection.length > 0) {
-                  // Start polling if not running
+                  // 実行中でない場合はポーリングを開始
                   if (!intervalId) {
-                      console.log('Selection detected. Starting polling loop...');
-                      // Initialize tracking for new selection
+                      console.log('選択を検出しました。ポーリングループを開始します...');
+                      // 新しい選択の追跡を初期化
                       for (const item of selection) {
                           if (!trackedItemsRef.current.has(item.id)) {
                               trackedItemsRef.current.set(item.id, { 
@@ -238,11 +209,11 @@ const App: React.FC = () => {
                               // Handle empty selection grace period
                               if (currentSelection.length === 0) {
                                   emptySelectionCount++;
-                                  if (emptySelectionCount < 5) { // Wait for 5 consecutive empty polls (250ms)
+                                  if (emptySelectionCount < 5) { // 5回連続の空のポーリング（250ms）を待つ
                                       return;
                                   }
-                                  // If we reached here, it's truly empty (Drop detected)
-                                  console.log('No items selected for 250ms. Processing drops and stopping loop.');
+                                  // ここに到達した場合、本当に空（ドロップ検出）
+                                  console.log('250msの間アイテムが選択されていません。ドロップを処理してループを停止します。');
                                   
                                   const droppedItems: any[] = [];
                                   for (const [id, tracked] of trackedItemsRef.current.entries()) {
@@ -257,7 +228,7 @@ const App: React.FC = () => {
                                   }
 
                                   if (droppedItems.length > 0) {
-                                      console.log('Triggering move for dropped items:', droppedItems.length);
+                                      console.log('ドロップされたアイテムの移動をトリガーします:', droppedItems.length);
                                       await handleTaskMove(droppedItems);
                                   }
 
@@ -267,43 +238,42 @@ const App: React.FC = () => {
                                   return;
                               }
                               
-                              // Reset counter if we found items
+                              // アイテムが見つかった場合はカウンターをリセット
                               emptySelectionCount = 0;
 
                               const currentIds = new Set(currentSelection.map((i: any) => i.id));
                               const itemsToMove: any[] = [];
 
-                              // Check tracked items
+                              // 追跡されたアイテムを確認
                               for (const item of currentSelection) {
                                   let tracked = trackedItemsRef.current.get(item.id);
                                   if (!tracked) {
-                                      // New item added to selection
-                                      console.log('Tracking new item:', item.id);
+                                      // 新しいアイテムが選択に追加された
+                                      console.log('新しいアイテムを追跡します:', item.id);
                                       tracked = { x: item.x, y: item.y, stableCount: 0, type: item.type };
                                       trackedItemsRef.current.set(item.id, tracked);
                                   } else {
-                                      // Check movement
+                                      // 移動を確認
                                       const dx = Math.abs(tracked.x - item.x);
                                       const dy = Math.abs(tracked.y - item.y);
                                       
-                                      // Relaxed stability check: < 5px movement
+                                      // 緩和された安定性チェック: 5px未満の移動
                                       if (dx < 5 && dy < 5) {
                                           tracked.stableCount++;
-                                          // Always update coordinates to ensure we have the latest position on drop
-                                          // even if the movement was small
+                                          // 移動が小さくても、ドロップ時に最新の位置を確保するため常に座標を更新
                                           tracked.x = item.x;
                                           tracked.y = item.y;
 
-                                          // console.log(`Item ${item.id} stable count: ${tracked.stableCount}`);
-                                          // Trigger move if stable for ~1 second (4 * 250ms = 1000ms)
+                                          // console.log(`アイテム ${item.id} 安定カウント: ${tracked.stableCount}`);
+                                          // 約1秒間安定している場合に移動をトリガー（4 * 250ms = 1000ms）
                                           if (tracked.stableCount === 4) { 
                                               if (item.type === 'sticky_note') {
-                                                  console.log('Item stable, triggering move:', item.id);
+                                                  console.log('アイテムが安定しています、移動をトリガーします:', item.id);
                                                   itemsToMove.push(item);
                                               }
                                           }
                                       } else {
-                                          // console.log(`Item ${item.id} moved: dx=${dx}, dy=${dy}`);
+                                          // console.log(`アイテム ${item.id} が移動しました: dx=${dx}, dy=${dy}`);
                                           tracked.x = item.x;
                                           tracked.y = item.y;
                                           tracked.stableCount = 0;
