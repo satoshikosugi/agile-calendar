@@ -444,17 +444,6 @@ export async function reorganizeTasksOnDate(
                         const cachedDate = taskDateCache.get(task.id);
                         if (cachedDate && cachedDate !== date) return null;
 
-                        // getDateFromPosition用に座標を修正
-                        // frame.getChildren()はフレーム中心からの相対座標を返す
-                        // getDateFromPositionは絶対座標を期待
-                        let checkX = note.x;
-                        let checkY = note.y;
-                        
-                        if (note.parentId === frame.id) {
-                             checkX = frame.x + note.x;
-                             checkY = frame.y + note.y;
-                        }
-
                         // 座標から計算した日付が一致する場合
                         // 高コストのため、実際には非同期チェックをスキップし、内部境界チェックを信頼
                         // ここでは単純に不一致として扱い、除外
