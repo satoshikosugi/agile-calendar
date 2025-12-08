@@ -2,17 +2,21 @@ import { miro } from '../miro';
 import { Settings, Task } from '../models/types';
 import { withRetry } from '../utils/retry';
 
-// Calendar layout constants
+// カレンダーレイアウトの定数
 const CALENDAR_FRAME_WIDTH = 5600;
 const CALENDAR_FRAME_HEIGHT = 4800;
 const CALENDAR_FRAME_SPACING = 600;
-const CALENDAR_EPOCH_YEAR = 2024; // Fixed reference year for coordinate system
+const CALENDAR_EPOCH_YEAR = 2024; // 座標系の固定基準年
 
-// Generate a single month calendar frame on the board
+// フレームキャッシュ（API呼び出しを削減）
+const frameCache = new Map<string, { frame: any, timestamp: number }>();
+const FRAME_CACHE_TTL = 5000; // 5秒間キャッシュ
+
+// ボード上に単一月のカレンダーフレームを生成
 export async function generateCalendar(yearMonth: string, settings: Settings): Promise<void> {
   const monthDate = new Date(yearMonth + '-01');
   
-  // New larger dimensions for monthly calendar layout
+  // 月間カレンダーレイアウトのための新しい大きなサイズ
   const frameWidth = CALENDAR_FRAME_WIDTH;
   const frameHeight = CALENDAR_FRAME_HEIGHT;
   const frameSpacing = CALENDAR_FRAME_SPACING;
@@ -21,22 +25,21 @@ export async function generateCalendar(yearMonth: string, settings: Settings): P
   
   const monthStr = yearMonth; // YYYY-MM
   
-  // Check if frame already exists
+  // フレームが既に存在するか確認
   const existingFrames = await withRetry<any[]>(() => miro.board.get({ type: 'frame' }));
   const frameExists = existingFrames.some(
     (frame: any) => frame.title === `Calendar ${monthStr}`
   );
   
   if (frameExists) {
-    console.warn(`Calendar for ${monthStr} already exists.`);
+    console.warn(`${monthStr}のカレンダーは既に存在します。`);
     await moveToMonth(monthStr);
     return;
   }
 
-  // Calculate position based on fixed epoch to ensure consistent positioning
-  // regardless of settings.baseMonth
+  // settings.baseMonthに関係なく一貫した配置を保証するため、固定エポックに基づいて位置を計算
   const diffYear = monthDate.getFullYear() - CALENDAR_EPOCH_YEAR;
-  const diffMonth = diffYear * 12 + monthDate.getMonth(); // month is 0-11
+  const diffMonth = diffYear * 12 + monthDate.getMonth(); // monthは0-11
   
   const x = startX + diffMonth * (frameWidth + frameSpacing);
   const y = startY;
@@ -52,17 +55,20 @@ export async function generateCalendar(yearMonth: string, settings: Settings): P
     },
   }));
   
-  // Add monthly calendar structure within the frame
+  // フレームキャッシュに追加
+  frameCache.set(`Calendar ${monthStr}`, { frame, timestamp: Date.now() });
+  
+  // フレーム内に月間カレンダー構造を追加
   await createMonthlyCalendarGrid(frame, monthDate, settings);
   
-  // Move viewport to the new calendar
+  // 新しいカレンダーにビューポートを移動
   await moveToMonth(monthStr);
   
-  // Explicitly zoom to the new frame to ensure user sees it
+  // 新しいフレームにズームしてユーザーが確実に見られるようにする
   try {
       await miro.board.viewport.zoomTo(frame);
   } catch (e) {
-      console.error('Failed to zoom to frame:', e);
+      console.error('フレームへのズームに失敗しました:', e);
   }
 }
 
@@ -299,24 +305,41 @@ export async function navigateToNextMonth(settings: Settings): Promise<Settings>
   return newSettings;
 }
 
-// Helper to find frame
+// フレームを見つけるヘルパー（キャッシュ付き）
 export async function getCalendarFrame(year: number, month: number): Promise<any> {
   const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const cacheKey = `Calendar ${monthStr}`;
+  
+  // キャッシュを確認
+  const cached = frameCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < FRAME_CACHE_TTL) {
+    return cached.frame;
+  }
+  
+  // キャッシュミスの場合、フレームを取得
   const frames = await withRetry<any[]>(() => miro.board.get({ type: 'frame' }));
-  return frames.find((f: any) => f.title === `Calendar ${monthStr}`);
+  const frame = frames.find((f: any) => f.title === cacheKey);
+  
+  // キャッシュに保存
+  if (frame) {
+    frameCache.set(cacheKey, { frame, timestamp: Date.now() });
+  }
+  
+  return frame;
 }
 
+// 特定の日付のタスクの位置を計算
 export async function calculateTaskPositionsForDate(
   date: string,
   tasks: Task[]
 ): Promise<Map<string, { x: number, y: number }>> {
-  // Parse date string manually to avoid timezone issues
+  // タイムゾーンの問題を避けるため、日付文字列を手動で解析
   const [y, m, d] = date.split('-').map(Number);
   const year = y;
-  const month = m - 1; // 0-indexed
+  const month = m - 1; // 0インデックス
   const day = d;
 
-  // 1. Find Frame
+  // 1. フレームを検索
   let frame = await getCalendarFrame(year, month);
   
   let frameX = 0;
@@ -326,11 +349,11 @@ export async function calculateTaskPositionsForDate(
     frameX = frame.x;
     frameY = frame.y;
   } else {
-    console.warn(`Frame for ${date} not found.`);
+    console.warn(`${date}のフレームが見つかりません。`);
     return new Map();
   }
 
-  // 2. Calculate Cell Position
+  // 2. セルの位置を計算
   const frameWidth = CALENDAR_FRAME_WIDTH;
   const frameHeight = CALENDAR_FRAME_HEIGHT;
   
@@ -353,39 +376,39 @@ export async function calculateTaskPositionsForDate(
   const cellX = frameX - frameWidth / 2 + colWidth * dayOfWeek;
   const cellY = contentStartY + rowHeight * weekRow;
   
-  // 3. Sort Tasks
-  // Sort by time (asc), then untimed tasks at the end
+  // 3. タスクをソート
+  // 時刻順（昇順）、その後時刻なしタスクを最後に
   const sortedTasks = [...tasks].sort((a, b) => {
     const timeA = a.time?.startTime || '99:99';
     const timeB = b.time?.startTime || '99:99';
     return timeA.localeCompare(timeB);
   });
   
-  // 4. Stack Layout (5x5 Grid)
+  // 4. スタックレイアウト（5x5グリッド）
   const positions = new Map<string, { x: number, y: number }>();
   // const MAX_COLS = 5;
   const ITEM_WIDTH = 140;
-  const ITEM_HEIGHT = 140; // Assumed height
+  const ITEM_HEIGHT = 140; // 想定される高さ
   const GAP = 10;
   
-  // Start from top-left of the cell, below the day number
-  // cellX is left edge, cellY is top edge
+  // セルの左上から開始、日付番号の下
+  // cellXは左端、cellYは上端
   const startX = cellX + GAP + ITEM_WIDTH / 2;
-  const startY = cellY + 80 + GAP + ITEM_HEIGHT / 2; // Skip day number area (approx 80px)
+  const startY = cellY + 80 + GAP + ITEM_HEIGHT / 2; // 日付番号エリアをスキップ（約80px）
   
-  // Divider logic:
-  // The cell is divided into Left (Team) and Right (Personal)
-  // The divider is at cellX + colWidth / 2
-  // Left area: cellX to cellX + colWidth/2
-  // Right area: cellX + colWidth/2 to cellX + colWidth
+  // ディバイダーロジック:
+  // セルは左（チーム）と右（個人）に分割される
+  // ディバイダーはcellX + colWidth / 2にある
+  // 左エリア: cellXからcellX + colWidth/2
+  // 右エリア: cellX + colWidth/2からcellX + colWidth
   
-  // Calculate how many columns fit in the Left side (Team area)
+  // 左側（チームエリア）に収まる列数を計算
   const halfWidth = colWidth / 2;
-  const colsPerSide = Math.floor((halfWidth - GAP) / (ITEM_WIDTH + GAP)); // e.g. 2
+  const colsPerSide = Math.floor((halfWidth - GAP) / (ITEM_WIDTH + GAP)); // 例：2
   
-  // Use colsPerSide as the max columns to ensure tasks stay on the left side
-  // This effectively makes the layout "Top-Left to Down" (wrapping to next row sooner)
-  // instead of crossing the divider.
+  // colsPerSideを最大列数として使用し、タスクが左側に留まることを保証
+  // これにより、レイアウトは「左上から下へ」（より早く次の行に折り返す）となり
+  // ディバイダーを越えないようになる
   const effectiveMaxCols = Math.max(1, colsPerSide);
   
   sortedTasks.forEach((task, index) => {
