@@ -379,32 +379,49 @@ const Timetable: React.FC<TimetableProps> = ({ date, tasks, settings, selectedTa
                     }}
                     onMouseEnter={(e) => {
                       if (selectedTaskId) return;
-                      if (event.type !== 'task') return;
 
-                      const task = tasks.find(t => t.id === event.id);
-                      if (task) {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        
-                        // Calculate position relative to container or viewport
-                        // Using fixed position for simplicity in z-index
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = rect.right + 10;
+                      const y = rect.top;
+
+                      if (event.type === 'task') {
+                        const task = tasks.find(t => t.id === event.id);
+                        if (task) {
+                          setTooltip({
+                            x,
+                            y,
+                            content: (
+                              <div className="task-tooltip-content">
+                                <div className="tooltip-title">{task.title}</div>
+                                <div className="tooltip-summary">{task.summary}</div>
+                                <div className="tooltip-time">
+                                  {formatTime(event.start)} - {formatTime(event.end)}
+                                </div>
+                                <div className="tooltip-status">
+                                  ステータス: {{
+                                    'Draft': '下書き',
+                                    'Planned': '計画済',
+                                    'Scheduled': '確定済',
+                                    'Done': '完了',
+                                    'Canceled': '中止'
+                                  }[task.status] || task.status}
+                                </div>
+                              </div>
+                            )
+                          });
+                        }
+                      } else if (event.type === 'personal' || event.type === 'off') {
                         setTooltip({
-                          x: rect.right + 10,
-                          y: rect.top,
+                          x,
+                          y,
                           content: (
                             <div className="task-tooltip-content">
-                              <div className="tooltip-title">{task.title}</div>
-                              <div className="tooltip-summary">{task.summary}</div>
+                              <div className="tooltip-title">{event.devName}</div>
+                              {event.description && (
+                                <div className="tooltip-summary">{event.description}</div>
+                              )}
                               <div className="tooltip-time">
                                 {formatTime(event.start)} - {formatTime(event.end)}
-                              </div>
-                              <div className="tooltip-status">
-                                ステータス: {{
-                                  'Draft': '下書き',
-                                  'Planned': '計画済',
-                                  'Scheduled': '確定済',
-                                  'Done': '完了',
-                                  'Canceled': '中止'
-                                }[task.status] || task.status}
                               </div>
                             </div>
                           )

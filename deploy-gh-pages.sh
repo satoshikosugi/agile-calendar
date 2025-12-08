@@ -37,7 +37,7 @@ git subtree push --prefix dist origin gh-pages
 
 if [ $? -eq 0 ]; then
     echo -e "\n\033[0;32m✅ Deployment successful!\033[0m"
-    echo -e "\033[0;36mYour app will be available at: https://satoshikosugi.github.io/agile-calender/\033[0m"
+    echo -e "\033[0;36mYour app will be available at: https://satoshikosugi.github.io/agile-calendar/\033[0m"
     echo -e "\033[0;33mNote: It may take 2-3 minutes for changes to appear.\033[0m"
 else
     echo -e "\n\033[0;31m❌ Deployment failed!\033[0m"

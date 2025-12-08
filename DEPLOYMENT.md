@@ -26,7 +26,7 @@
 1. リポジトリ設定でGitHub Pagesを有効化
 2. ソースを`gh-pages`ブランチまたは`/docs`フォルダに設定
 3. `dist/`の内容を選択した場所にデプロイ
-4. アプリは`https://YOUR_USERNAME.github.io/agile-calender/`で利用可能になります
+4. アプリは`https://YOUR_USERNAME.github.io/agile-calendar/`で利用可能になります
 
 ### オプションB: Vercel
 

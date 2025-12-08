@@ -58,7 +58,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
         setTask({
           id: `task-${Date.now()}`,
           status: 'Draft',
-          title: '新しいタスク',
+          title: '',
           summary: '',
           roles: {
             pmId: undefined,
@@ -196,6 +196,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
           type="text"
           value={task.title}
           onChange={(e) => setTask({ ...task, title: e.target.value })}
+          placeholder="タスク名を入力"
         />
       </div>
 
@@ -207,17 +208,25 @@ const TaskForm: React.FC<TaskFormProps> = ({ taskId: propTaskId, mode: propMode,
         />
       </div>
 
+      <div className="form-group">
+        <label>外部リンク (URL)</label>
+        <input
+          type="url"
+          value={task.externalLink || ''}
+          onChange={(e) => setTask({ ...task, externalLink: e.target.value || undefined })}
+          placeholder="https://..."
+        />
+      </div>
+
         <div className="form-group">
           <label>ステータス</label>
           <select
             value={task.status}
             onChange={(e) => setTask({ ...task, status: e.target.value as TaskStatus })}
           >
-            <option value="Draft">下書き</option>
+            <option value="Draft">ドラフト</option>
             <option value="Planned">計画済</option>
-            <option value="Scheduled">確定済</option>
             <option value="Done">完了</option>
-            <option value="Canceled">中止</option>
           </select>
         </div>
 

@@ -183,12 +183,6 @@
   border-top: 1px dashed #fbc02d;
   border-bottom: 1px dashed #fbc02d;
 }
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 500;
-  color: #333;
-}
 
 .event-block.type-off {
   background-image: repeating-linear-gradient(
@@ -239,7 +233,7 @@
 
 .event-block.selected-event {
   border: 2px solid #2196f3;
-  z-index: 20;
+  z-index: 30;
   animation: pulse-border 2s infinite;
 }
 

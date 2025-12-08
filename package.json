@@ -1,11 +1,11 @@
 {
-  "name": "agile-calender",
+  "name": "agile-calendar",
   "version": "1.0.0",
   "description": "Miro Standup Scheduler App",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "node scripts/increment-build.js && tsc && vite build",
     "preview": "vite preview",
     "deploy": "powershell -ExecutionPolicy Bypass -File ./deploy-gh-pages.ps1"
   },

@@ -173,3 +173,99 @@
   gap: 8px;
   margin-top: 20px;
 }
+
+.bulk-actions-bar {
+    background-color: #e8f0ff;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.selected-count {
+    font-weight: bold;
+    margin-right: auto;
+}
+
+.bulk-action-group {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.bulk-date-input {
+    padding: 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.tasks-filter-bar {
+    margin-bottom: 10px;
+    padding: 0 5px;
+}
+
+.select-all-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.task-checkbox {
+    padding-top: 2px;
+}
+
+.task-content-wrapper {
+    flex: 1;
+}
+
+.task-main-info {
+    margin-bottom: 4px;
+}
+
+.task-title-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 4px;
+}
+
+.task-link-icon {
+    font-size: 12px;
+}
+
+.task-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+    color: #666;
+    align-items: center;
+}
+
+.task-time {
+    background-color: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.task-sub-info {
+    font-size: 12px;
+    color: #888;
+}
+
+.btn-sm {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+

@@ -5,7 +5,7 @@ Agile Calendarプロジェクトへの関心をお寄せいただき、ありが
 ## はじめに
 
 1. リポジトリをフォーク
-2. フォークをクローン: `git clone https://github.com/YOUR_USERNAME/agile-calender.git`
+2. フォークをクローン: `git clone https://github.com/YOUR_USERNAME/agile-calendar.git`
 3. フィーチャーブランチを作成: `git checkout -b feature/your-feature-name`
 4. 変更を加える
 5. 変更をテスト
@@ -36,6 +36,10 @@ npm run preview
 - 意味のある変数名と関数名を使用
 - 複雑なロジックにはコメントを追加
 - 関数は小さく、焦点を絞った状態に保つ
+
+## AI Agent / 自動開発ルール
+
+- **修正後は必ずビルド＆デプロイ**: コードを修正した後は、必ず `npm run build` と `npm run deploy` を実行して、変更をライブ環境に反映させてください。
 
 ## プルリクエストガイドライン
 
