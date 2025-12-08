@@ -42,10 +42,10 @@ git commit -m "deploy: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Host "`n[3/3] Pushing to GitHub..." -ForegroundColor Yellow
 
 # Push to the remote repository
-git push -f git@github.com:satoshikosugi/agile-calender.git gh-pages
+git push -f git@github.com:satoshikosugi/agile-calendar.git gh-pages
 
 # Return to project root
 Set-Location $root
 
 Write-Host "`n✅ Deployment successful!" -ForegroundColor Green
-Write-Host "Your app will be available at: https://satoshikosugi.github.io/agile-calender/" -ForegroundColor Cyan
+Write-Host "Your app will be available at: https://satoshikosugi.github.io/agile-calendar/" -ForegroundColor Cyan

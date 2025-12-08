@@ -2,7 +2,7 @@
   "name": "Agile Calendar",
   "version": "1.0.0",
   "description": "A Miro app for managing agile team standups with tasks, tracks, and schedules",
-  "icon": "https://satoshikosugi.github.io/agile-calender/icon-color.svg",
+  "icon": "https://satoshikosugi.github.io/agile-calendar/icon-color.svg",
   "permissions": [
     "boards:read",
     "boards:write"
@@ -15,7 +15,7 @@
     "panel"
   ],
   "urls": {
-    "panel": "https://satoshikosugi.github.io/agile-calender/"
+    "panel": "https://satoshikosugi.github.io/agile-calendar/"
   },
   "tags": [
     "productivity",

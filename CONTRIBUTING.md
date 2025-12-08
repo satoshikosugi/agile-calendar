@@ -5,7 +5,7 @@ Agile Calendarプロジェクトへの関心をお寄せいただき、ありが
 ## はじめに
 
 1. リポジトリをフォーク
-2. フォークをクローン: `git clone https://github.com/YOUR_USERNAME/agile-calender.git`
+2. フォークをクローン: `git clone https://github.com/YOUR_USERNAME/agile-calendar.git`
 3. フィーチャーブランチを作成: `git checkout -b feature/your-feature-name`
 4. 変更を加える
 5. 変更をテスト

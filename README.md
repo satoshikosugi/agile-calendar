@@ -98,8 +98,8 @@ src/
 
 1. リポジトリをクローン:
    ```bash
-   git clone https://github.com/satoshikosugi/agile-calender.git
-   cd agile-calender
+   git clone https://github.com/satoshikosugi/agile-calendar.git
+   cd agile-calendar
    ```
 
 2. 依存関係をインストール:
