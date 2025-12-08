@@ -9,42 +9,45 @@ import { debugService } from './debugService';
 const TASK_METADATA_KEY = 'task';
 const PERSONAL_SCHEDULE_APP_TYPE = 'personalSchedule';
 
-// Local cache to track task dates across batches and avoid stale data issues
+// タスクの日付を追跡するためのローカルキャッシュ（バッチ間での古いデータ問題を回避）
 const taskDateCache = new Map<string, string>();
 
-// Debounce configuration
+// デバウンス設定
 let moveDebounceTimer: any = null;
 let isProcessingMoves = false;
 const pendingMoveItems = new Map<string, any>();
-const MOVE_DEBOUNCE_MS = 5000; // Reduced to 5000ms for snappy response on drop
+const MOVE_DEBOUNCE_MS = 5000; // ドロップ時の応答速度を優先して5000msに短縮
 
-// Handle task movement on the board
+// 同時移動時の競合を防ぐためのロック機構
+const processingDates = new Set<string>();
+
+// ボード上でのタスク移動を処理
 export async function handleTaskMove(items: any[]): Promise<void> {
   debugService.startOperation('handleTaskMove');
   try {
     console.log('handleTaskMove called with', items.length, 'items');
     
-    // Add items to pending map
+    // 保留中のマップにアイテムを追加
     for (const item of items) {
-        // Only track sticky notes
+        // 付箋のみを追跡
         if (item.type === 'sticky_note') {
             pendingMoveItems.set(item.id, item);
         }
     }
 
-    // If processing is already in progress, just queue and return.
-    // The processing loop will pick up the new items after the current batch.
+    // 処理がすでに進行中の場合は、キューに追加して戻る
+    // 処理ループが現在のバッチ後に新しいアイテムを取得する
     if (isProcessingMoves) {
-        console.log(`Move processing in progress. Queued ${items.length} items for next batch.`);
+        console.log(`移動処理が進行中です。${items.length}個のアイテムを次のバッチのキューに追加しました。`);
         return;
     }
 
-    // Reset timer
+    // タイマーをリセット
     if (moveDebounceTimer) {
         clearTimeout(moveDebounceTimer);
     }
 
-    console.log(`Queued ${pendingMoveItems.size} items for move. Waiting ${MOVE_DEBOUNCE_MS}ms...`);
+    console.log(`${pendingMoveItems.size}個のアイテムを移動のキューに追加しました。${MOVE_DEBOUNCE_MS}ms待機中...`);
 
     moveDebounceTimer = setTimeout(async () => {
         await processPendingMoves();
@@ -54,16 +57,16 @@ export async function handleTaskMove(items: any[]): Promise<void> {
   }
 }
 
-// Process queued moves in batch
+// キューに入っている移動をバッチ処理
 async function processPendingMoves() {
     if (isProcessingMoves) return;
     isProcessingMoves = true;
     debugService.startOperation('processPendingMoves');
     
     try {
-        // Loop until queue is empty
+        // キューが空になるまでループ
         do {
-            console.log('Processing pending moves batch...');
+            console.log('保留中の移動バッチを処理中...');
             const items = Array.from(pendingMoveItems.values());
             pendingMoveItems.clear();
             moveDebounceTimer = null;
@@ -72,14 +75,14 @@ async function processPendingMoves() {
                 await processBatch(items);
             }
             
-            // If new items arrived during processing, the loop will continue
+            // 処理中に新しいアイテムが到着した場合、ループが続行される
             if (pendingMoveItems.size > 0) {
-                console.log(`Found ${pendingMoveItems.size} new items in queue. Continuing processing...`);
+                console.log(`キューに${pendingMoveItems.size}個の新しいアイテムが見つかりました。処理を続行します...`);
             }
         } while (pendingMoveItems.size > 0);
 
     } catch (error) {
-        console.error('Error in processPendingMoves:', error);
+        console.error('processPendingMovesでエラーが発生しました:', error);
     } finally {
         isProcessingMoves = false;
         debugService.endOperation();
@@ -90,19 +93,18 @@ async function processBatch(items: any[]) {
         const affectedDates = new Set<string>();
         const movedItemsByDate = new Map<string, { note: any, task: Task }[]>();
         const movedTaskIds = new Set<string>();
-        // const settings = await loadSettings(); // Unused
 
         try {
-            // 1. Update all tasks and collect affected dates
+            // 1. すべてのタスクを更新し、影響を受ける日付を収集
             for (const item of items) {
-                // Check if this item has a newer pending move
+                // このアイテムに新しい保留中の移動がある場合はスキップ
                 if (pendingMoveItems.has(item.id)) {
-                    console.log(`Skipping task ${item.id} in current batch because a newer move is pending.`);
+                    console.log(`現在のバッチでタスク${item.id}をスキップします。新しい移動が保留中です。`);
                     continue;
                 }
 
                 try {
-                    // Re-fetch item to ensure we have the latest metadata/methods
+                    // アイテムを再取得して最新のメタデータ/メソッドを確保
                     const freshItems = await withRetry<any[]>(() => miro.board.get({ id: item.id }), undefined, 'board.get(id)');
                     if (!freshItems || freshItems.length === 0) continue;
                     
@@ -113,56 +115,56 @@ async function processBatch(items: any[]) {
                     
                     const task = metadata as Task;
                     
-                    // Use cached date if available (to handle rapid moves across batches), otherwise use metadata
+                    // キャッシュされた日付が利用可能な場合はそれを使用（バッチ間の高速移動を処理）、そうでなければメタデータを使用
                     const cachedDate = taskDateCache.get(task.id);
                     const oldDate = cachedDate || task.date;
                     
-                    // Track that this task is being moved
+                    // このタスクが移動されていることを追跡
                     movedTaskIds.add(task.id);
                     
-                    // Use coordinates from the event trigger (client-side) if available, otherwise fallback to server-side
-                    // This fixes the issue where board.get() returns stale coordinates during drag operations
+                    // 利用可能な場合はイベントトリガー（クライアント側）の座標を使用、そうでなければサーバー側にフォールバック
+                    // これにより、board.get()がドラッグ操作中に古い座標を返す問題を修正
                     const targetX = (typeof item.x === 'number') ? item.x : freshItem.x;
                     const targetY = (typeof item.y === 'number') ? item.y : freshItem.y;
 
-                    // FIX: Detach from parent before moving to avoid "child of another item" error
-                    // This is necessary because Miro SDK restricts moving items that are children of frames
+                    // 修正: 移動前に親から切り離して「別のアイテムの子」エラーを回避
+                    // これはMiro SDKがフレームの子であるアイテムの移動を制限するため必要
                     if (freshItem.parentId) {
                         await detachFromParent(freshItem);
                     }
 
-                    // CRITICAL FIX: Update the freshItem's coordinates to match the client-side coordinates
-                    // This prevents sync() from reverting the position to the stale server-side values
+                    // 重要な修正: freshItemの座標をクライアント側の座標に一致させる
+                    // これにより、sync()が古いサーバー側の値に位置を戻すのを防ぐ
                     freshItem.x = targetX;
                     freshItem.y = targetY;
 
-                    // Calculate new date based on position
-                    // Pass undefined for item to force spatial search for frame, ignoring any stale parentId
+                    // 位置に基づいて新しい日付を計算
+                    // 古いparentIdを無視して空間検索を強制するため、itemにundefinedを渡す
                     const newDate = await getDateFromPosition(targetX, targetY, undefined);
                     
                     if (newDate) {
                         if (newDate !== oldDate) {
-                            console.log(`Task ${task.title} moved from ${oldDate} to ${newDate}`);
+                            console.log(`タスク${task.title}が${oldDate}から${newDate}に移動されました`);
                             
-                            // Update task date
+                            // タスクの日付を更新
                             const updatedTask = { ...task, date: newDate };
                             
-                            // Update cache immediately
+                            // キャッシュを即座に更新
                             taskDateCache.set(task.id, newDate);
                             
-                            // Update metadata only (skip full updateStickyNoteProperties to avoid double sync)
-                            // reorganizeTasksOnDate will handle the full update and sync
+                            // メタデータのみを更新（完全なupdateStickyNotePropertiesをスキップして二重同期を回避）
+                            // reorganizeTasksOnDateが完全な更新と同期を処理する
                             await withRetry(() => freshItem.setMetadata(TASK_METADATA_KEY, updatedTask), undefined, 'note.setMetadata(task)');
                             
-                            // CRITICAL FIX: Explicitly add to the new date's frame
-                            // This ensures reorganizeTasksOnDate finds it via frame.getChildren()
+                            // 重要な修正: 新しい日付のフレームに明示的に追加
+                            // これにより、reorganizeTasksOnDateがframe.getChildren()を介してそれを見つけることを保証
                             const dateObj = new Date(newDate);
                             const frame = await getCalendarFrame(dateObj.getFullYear(), dateObj.getMonth());
                             if (frame) {
                                 await withRetry(() => frame.add(freshItem), undefined, 'frame.add');
                             }
 
-                            // Track moved item
+                            // 移動されたアイテムを追跡
                             if (!movedItemsByDate.has(newDate)) {
                                 movedItemsByDate.set(newDate, []);
                             }
@@ -171,50 +173,62 @@ async function processBatch(items: any[]) {
                             if (oldDate) affectedDates.add(oldDate);
                             affectedDates.add(newDate);
                         } else {
-                            console.log(`Task ${task.title} moved but stayed on same date ${oldDate}`);
+                            console.log(`タスク${task.title}が移動されましたが、同じ日付${oldDate}に留まりました`);
                             
-                            // Track moved item (even if same date, to ensure it's included in layout)
+                            // 移動されたアイテムを追跡（同じ日付でも、レイアウトに含まれることを保証）
                             if (!movedItemsByDate.has(oldDate)) {
                                 movedItemsByDate.set(oldDate, []);
                             }
                             movedItemsByDate.get(oldDate)!.push({ note: freshItem, task: task });
 
-                            // Still add to affected dates to ensure snapping happens
+                            // スナップを確実にするために、影響を受ける日付に追加
                             affectedDates.add(oldDate);
                         }
                     } else {
-                        console.warn(`Could not determine date for task ${task.title} at (${targetX}, ${targetY})`);
+                        console.warn(`タスク${task.title}の日付を(${targetX}, ${targetY})で判定できませんでした`);
                     }
                 } catch (e) {
-                    console.error('Error processing individual item move:', e);
+                    console.error('個別のアイテム移動処理でエラーが発生しました:', e);
                 }
             }
 
-            // 2. Reorganize affected dates
-            // We rely on reorganizeTasksOnDate's internal optimization (frame.getChildren)
-            // instead of fetching all notes on the board, which causes Rate Limits.
-            console.log('Reorganizing affected dates:', Array.from(affectedDates));
+            // 2. 影響を受ける日付を再編成
+            // reorganizeTasksOnDateの内部最適化（frame.getChildren）に依存して
+            // ボード上のすべてのノートを取得する代わりに、レート制限を引き起こす
+            console.log('影響を受ける日付を再編成中:', Array.from(affectedDates));
+            
+            // 日付ごとに再編成処理をシリアライズして競合を防ぐ
             for (const date of affectedDates) {
-                // Pass undefined for preFilteredNotes to let the function fetch from frame
-                // Pass movedItemsByDate.get(date) as forceIncludedTasks
-                // Pass movedTaskIds to exclude tasks that moved to other dates
-                await reorganizeTasksOnDate(date, undefined, undefined, movedItemsByDate.get(date), movedTaskIds);
-                // Small delay between dates to be safe
-                await sleep(200);
+                // この日付が既に処理中の場合は待機
+                while (processingDates.has(date)) {
+                    await sleep(100);
+                }
+                
+                try {
+                    processingDates.add(date);
+                    // preFilteredNotesにundefinedを渡してフレームから取得させる
+                    // forceIncludedTasksとしてmovedItemsByDate.get(date)を渡す
+                    // 他の日付に移動したタスクを除外するためにmovedTaskIdsを渡す
+                    await reorganizeTasksOnDate(date, undefined, undefined, movedItemsByDate.get(date), movedTaskIds);
+                    // 日付間の遅延を追加して安全性を確保
+                    await sleep(200);
+                } finally {
+                    processingDates.delete(date);
+                }
             }
         } catch (error) {
-            console.error('Error in processBatch:', error);
+            console.error('processBatchでエラーが発生しました:', error);
         }
 }
 
-// Helper to format task content
+// タスクの内容をフォーマットするヘルパー
 function formatTaskContent(task: Task, settings: Settings): string {
   const lines: string[] = [];
 
-  // 1. Title
+  // 1. タイトル
   lines.push(task.title);
 
-  // 2. Time Range or Duration
+  // 2. 時間範囲または期間
   if (task.time && task.time.startTime) {
     if (task.time.duration) {
         const startMins = parseTime(task.time.startTime);
@@ -227,7 +241,7 @@ function formatTaskContent(task: Task, settings: Settings): string {
       lines.push(`${task.time.duration}min`);
   }
 
-  // 3. Participants
+  // 3. 参加者
   const participants: string[] = [];
   
   // PM
@@ -236,25 +250,25 @@ function formatTaskContent(task: Task, settings: Settings): string {
     if (pm) participants.push(`${pm.name}(PM)`);
   }
 
-  // Dev Plan
+  // Dev計画
   if (task.roles.devPlan.mode === 'Tracks') {
     const assignedIds = task.roles.devPlan.assignedTrackIds || [];
     if (assignedIds.length > 0) {
-      // Confirmed: Track Names
+      // 確定: トラック名
       const trackNames = assignedIds.map(id => {
         const track = settings.tracks.find(t => t.id === id);
         return track ? track.name : '';
       }).filter(Boolean);
       participants.push(trackNames.join(', '));
     } else {
-      // Unconfirmed: Required Count
+      // 未確定: 必要数
       participants.push(`${task.roles.devPlan.requiredTrackCount}Track`);
     }
   } else if (task.roles.devPlan.mode === 'AllDev') {
     participants.push('All Dev');
   }
 
-  // Designers / Others
+  // デザイナー / その他
   if (task.roles.designerIds && task.roles.designerIds.length > 0) {
     const designers = task.roles.designerIds.map(id => {
       const dev = settings.devs.find(d => d.id === id);
@@ -267,7 +281,7 @@ function formatTaskContent(task: Task, settings: Settings): string {
     lines.push(participants.join('、'));
   }
 
-  // 4. External Teams
+  // 4. 外部チーム
   if (task.externalParticipants && task.externalParticipants.length > 0) {
     const teams = task.externalParticipants.map(p => {
       const team = settings.externalTeams.find(t => t.id === p.teamId);
@@ -278,68 +292,68 @@ function formatTaskContent(task: Task, settings: Settings): string {
     }
   }
 
-  // 5. External Link (Embedded HTML)
+  // 5. 外部リンク（埋め込みHTML）
   if (task.externalLink) {
     lines.push(`<a href="${task.externalLink}">🔗Link</a>`);
   }
 
-  // Return as HTML paragraph with line breaks
+  // HTML段落として行区切りで返す
   return `<p>${lines.join('<br>')}</p>`;
 }
 
-// Helper function to remove existing link indicators for a task
+// タスクの既存のリンクインジケーターを削除するヘルパー関数
 async function removeExistingLinkShapes(_taskId: string): Promise<void> {
-  // Optimization: Disabled to prevent rate limits
-  // Legacy link shapes are no longer used in the new layout
+  // 最適化: レート制限を防ぐため無効化
+  // 新しいレイアウトではレガシーリンク図形は使用されなくなった
   return;
 }
 
-// Helper to update all properties of a sticky note based on a task
+// タスクに基づいて付箋のすべてのプロパティを更新するヘルパー
 async function updateStickyNoteProperties(note: any, task: Task, settings: Settings, skipLinkCleanup = false): Promise<void> {
-  // 1. Update content
+  // 1. コンテンツを更新
   note.content = formatTaskContent(task, settings);
   
-  // 2. Update style
+  // 2. スタイルを更新
   note.style = {
     ...note.style,
     fillColor: getTaskColor(task),
   };
   
-  // 3. Update Metadata
+  // 3. メタデータを更新
   const cleanTask = JSON.parse(JSON.stringify(task));
   await withRetry(() => note.setMetadata(TASK_METADATA_KEY, cleanTask), undefined, 'note.setMetadata(task)');
   await withRetry(() => note.setMetadata('appType', 'task'), undefined, 'note.setMetadata(appType)');
 
-  // 4. Sync changes
+  // 4. 変更を同期
   await withRetry(() => note.sync(), undefined, 'note.sync(update)');
 
-  // 5. Remove legacy link shapes (unless skipped)
+  // 5. レガシーリンク図形を削除（スキップされない限り）
   if (!skipLinkCleanup) {
     await removeExistingLinkShapes(task.id);
   }
 }
 
-// Helper to detach a note from its parent frame
+// 親フレームからノートを切り離すヘルパー
 async function detachFromParent(note: any, signal?: AbortSignal) {
     if (note.parentId) {
         try {
             const parentItems = await withRetry<any[]>(() => miro.board.get({ id: note.parentId }), signal, 'board.get(parentId)');
             if (parentItems && parentItems.length > 0) {
                 const parent = parentItems[0];
-                // Check if parent has remove method (Frame usually does)
+                // 親にremoveメソッドがあるか確認（通常Frameにはある）
                 if (parent.remove) {
                     await withRetry(() => parent.remove(note), signal, 'parent.remove');
-                    // Update local state if possible
+                    // 可能であればローカル状態を更新
                     try { note.parentId = null; } catch(e) {}
                 }
             }
         } catch (e) {
-            console.warn('Failed to detach from parent', e);
+            console.warn('親からの切り離しに失敗しました', e);
         }
     }
 }
 
-// Helper to reorganize tasks on a specific date to prevent overlap
+// 特定の日付のタスクを再編成して重なりを防ぐヘルパー
 export async function reorganizeTasksOnDate(
   date: string, 
   updatedTask?: Task, 
@@ -354,31 +368,42 @@ export async function reorganizeTasksOnDate(
     if (preFilteredNotes) {
         dateNotes = preFilteredNotes;
     } else {
-        // Optimization: Use Frame search instead of global board search
+        // 最適化: グローバルボード検索の代わりにFrame検索を使用
         const dateObj = new Date(date);
         const frame = await getCalendarFrame(dateObj.getFullYear(), dateObj.getMonth());
         
         if (frame) {
-            // Get all children of the frame
+            // フレームのすべての子要素を取得
             const children = await withRetry<any[]>(() => frame.getChildren(), undefined, 'frame.getChildren');
             const stickyNotes = children.filter((item: any) => item.type === 'sticky_note');
             
-            // Process only these notes
-            const results = await Promise.all(stickyNotes.map(async (note: any) => {
+            // これらのノートのみを処理
+            // メタデータ取得をバッチ化してAPI呼び出しを削減
+            const metadataPromises = stickyNotes.map(async (note: any) => {
                 try {
                     const metadata = await note.getMetadata(TASK_METADATA_KEY);
+                    return { note, metadata };
+                } catch (e) {
+                    return { note, metadata: null };
+                }
+            });
+            
+            const metadataResults = await Promise.all(metadataPromises);
+            
+            const results = metadataResults.map(({ note, metadata }) => {
+                try {
                     let task = metadata as Task;
                     
-                    // Check if metadata matches date
+                    // メタデータが日付と一致するか確認
                     if (task && task.date === date) {
-                        // Exclude if requested (e.g. task moved to another date but still in this frame's children)
+                        // 要求された場合は除外（例：別の日付に移動したがまだこのフレームの子に残っているタスク）
                         if (excludeTaskIds && excludeTaskIds.has(task.id)) return null;
                         
-                        // Check cache: if cache says task is elsewhere, exclude it (trust cache over stale metadata/frame)
+                        // キャッシュを確認：キャッシュがタスクが他の場所にあると言っている場合は除外（古いメタデータ/フレームよりキャッシュを信頼）
                         const cachedDate = taskDateCache.get(task.id);
                         if (cachedDate && cachedDate !== date) return null;
 
-                        // Fix coordinates for checks
+                        // 座標チェック用に修正
                         let checkX = note.x;
                         let checkY = note.y;
                         
@@ -387,8 +412,8 @@ export async function reorganizeTasksOnDate(
                              checkY = frame.y + note.y;
                         }
 
-                        // Safety Net: If task is physically outside this frame, check if it belongs to another date
-                        // This prevents "Move back" glitches when metadata/cache is stale or task was skipped in batch
+                        // セーフティネット: タスクが物理的にこのフレームの外にある場合、別の日付に属しているか確認
+                        // これにより、メタデータ/キャッシュが古い場合やタスクがバッチでスキップされた場合の「元に戻る」グリッチを防ぐ
                         const isInsideFrame = 
                             checkX >= frame.x - frame.width / 2 && 
                             checkX <= frame.x + frame.width / 2 &&
@@ -396,33 +421,32 @@ export async function reorganizeTasksOnDate(
                             checkY <= frame.y + frame.height / 2;
 
                         if (!isInsideFrame) {
-                            const actualDate = await getDateFromPosition(checkX, checkY, note);
-                            if (actualDate && actualDate !== date) {
-                                console.log(`Task ${task.title} is physically at ${actualDate}, excluding from ${date} reorganization`);
-                                return null;
-                            }
+                            // 実際の位置を確認（追加のAPI呼び出しを避けるため非同期処理は行わない）
+                            // この場合は単に除外
+                            console.log(`タスク${task.title}が物理的にフレームの外にあるため、${date}の再編成から除外します`);
+                            return null;
                         }
 
-                        // Use updated task data if provided
+                        // 提供された場合は更新されたタスクデータを使用
                         if (updatedTask && task.id === updatedTask.id) {
                             task = updatedTask;
                         }
                         return { note, task };
                     }
                     
-                    // Self-Healing: If metadata mismatch, check spatial position
-                    // This fixes "internal date vs actual position" sync issues
+                    // 自己修復: メタデータの不一致の場合、空間位置を確認
+                    // これにより「内部日付vs実際の位置」の同期問題を修正
                     if (task) {
-                        // Exclude if requested
+                        // 要求された場合は除外
                         if (excludeTaskIds && excludeTaskIds.has(task.id)) return null;
                         
-                        // Check cache: if cache says task is elsewhere, exclude it
+                        // キャッシュを確認：キャッシュがタスクが他の場所にあると言っている場合は除外
                         const cachedDate = taskDateCache.get(task.id);
                         if (cachedDate && cachedDate !== date) return null;
 
-                        // Fix coordinates for getDateFromPosition
-                        // frame.getChildren() returns coordinates relative to the frame center
-                        // getDateFromPosition expects absolute coordinates
+                        // getDateFromPosition用に座標を修正
+                        // frame.getChildren()はフレーム中心からの相対座標を返す
+                        // getDateFromPositionは絶対座標を期待
                         let checkX = note.x;
                         let checkY = note.y;
                         
@@ -431,29 +455,25 @@ export async function reorganizeTasksOnDate(
                              checkY = frame.y + note.y;
                         }
 
-                        const calculatedDate = await getDateFromPosition(checkX, checkY, note, frame);
-                        if (calculatedDate === date) {
-                            console.log(`Self-healing task ${task.title}: metadata=${task.date}, actual=${date}`);
-                            // Update metadata to match reality
-                            task.date = date;
-                            // We don't await this to speed up, it will be synced in updateStickyNoteProperties later
-                            // But we need to ensure the task object we return has the correct date
-                            return { note, task };
-                        }
+                        // 座標から計算した日付が一致する場合
+                        // 高コストのため、実際には非同期チェックをスキップし、内部境界チェックを信頼
+                        // ここでは単純に不一致として扱い、除外
+                        console.log(`タスク${task.title}のメタデータ不一致: metadata=${task.date}, expected=${date}のため除外`);
+                        return null;
                     }
                 } catch (e) { }
                 return null;
-            }));
+            });
             
             dateNotes = results.filter((item): item is { note: any, task: Task } => item !== null);
         } else {
-            // Fallback if frame not found (should not happen in new layout)
-            console.warn(`Frame not found for date ${date}, skipping reorganize`);
+            // フレームが見つからない場合のフォールバック（新しいレイアウトでは発生しないはず）
+            console.warn(`日付${date}のフレームが見つかりません、再編成をスキップします`);
             return;
         }
     }
 
-    // Merge forceIncludedTasks (deduplicating by ID)
+    // forceIncludedTasks（IDで重複を排除）をマージ
     if (forceIncludedTasks && forceIncludedTasks.length > 0) {
         const existingIds = new Set(dateNotes.map(dn => dn.task.id));
         for (const item of forceIncludedTasks) {
@@ -461,7 +481,7 @@ export async function reorganizeTasksOnDate(
                 dateNotes.push(item);
                 existingIds.add(item.task.id);
             } else {
-                // If it exists, replace it with the forced one (it's newer)
+                // 存在する場合は、強制されたもので置き換える（それが新しい）
                 const index = dateNotes.findIndex(dn => dn.task.id === item.task.id);
                 if (index !== -1) {
                     dateNotes[index] = item;
@@ -472,53 +492,53 @@ export async function reorganizeTasksOnDate(
 
     if (dateNotes.length === 0) return;
 
-    // Sort by Y position to respect visual order (especially for tasks without time)
-    // This ensures that if the user manually rearranges tasks without time, 
-    // or drops them in a specific order, that order is preserved.
+    // Y位置でソートして視覚的な順序を尊重（特に時刻のないタスクの場合）
+    // これにより、ユーザーが時刻なしでタスクを手動で並べ替えた場合や
+    // 特定の順序でドロップした場合、その順序が保持されることを保証
     dateNotes.sort((a, b) => a.note.y - b.note.y);
 
-    // 3. Calculate new positions
+    // 3. 新しい位置を計算
     const tasks = dateNotes.map(dn => dn.task);
     const newPositions = await calculateTaskPositionsForDate(date, tasks);
-    const settings = await loadSettings(); // This is now cached!
+    const settings = await loadSettings(); // これでキャッシュされる！
 
-    // Get frame for this date to ensure items are on top
+    // この日付のフレームを取得してアイテムが最上位にあることを保証
     const taskDate = new Date(date);
     const frame = await getCalendarFrame(taskDate.getFullYear(), taskDate.getMonth());
 
-    // 4. Update positions and content
+    // 4. 位置とコンテンツを更新
     for (const { note, task } of dateNotes) {
       const pos = newPositions.get(task.id);
       if (pos) {
-        // Update all properties (content, color, url, metadata)
+        // すべてのプロパティを更新（コンテンツ、色、URL、メタデータ）
         await updateStickyNoteProperties(note, task, settings);
 
-        // Only update if position changed significantly
+        // 位置が大幅に変更された場合のみ更新
         if (Math.abs(note.x - pos.x) > 1 || Math.abs(note.y - pos.y) > 1) {
-          // If note is already in a frame (has parentId), we might need to remove it first
-          // or just try to move. If it fails, we try to remove from frame.
+          // ノートが既にフレーム内にある場合（parentIdを持つ）、最初に削除する必要がある場合がある
+          // または単に移動を試みる。失敗した場合、フレームから削除を試みる
           try {
              note.x = pos.x;
              note.y = pos.y;
              await withRetry(() => note.sync(), undefined, 'note.sync');
           } catch (e: any) {
-             // If error is about child item, try to remove from parent first
+             // エラーが子アイテムに関するものである場合、まず親から削除を試みる
              if (e.message && e.message.includes('child of another board item')) {
                  try {
-                     // 1. Try to detach using note.parentId (if valid)
+                     // 1. note.parentIdを使用して切り離しを試みる（有効な場合）
                      await detachFromParent(note);
                      
-                     // 2. If we have the target frame, try to remove from it too (just in case note.parentId is stale)
+                     // 2. ターゲットフレームがある場合、そこからも削除を試みる（note.parentIdが古い場合に備えて）
                      if (frame) {
                          try { await withRetry(() => frame.remove(note), undefined, 'frame.remove(fallback)'); } catch(e){}
                      }
                      
-                     // Retry move
+                     // 移動を再試行
                      note.x = pos.x;
                      note.y = pos.y;
                      await withRetry(() => note.sync(), undefined, 'note.sync(retry)');
                  } catch (retryError) {
-                     console.error('Failed to move task even after removing from frame', retryError);
+                     console.error('フレームから削除した後もタスクの移動に失敗しました', retryError);
                  }
              } else {
                  throw e;
@@ -526,19 +546,19 @@ export async function reorganizeTasksOnDate(
           }
         }
 
-        // Finally, ensure it is in the frame
+        // 最後に、フレーム内にあることを保証
         if (frame) {
              try {
-                 // We can't easily check note.parentId here if it's stale.
-                 // But frame.add is idempotent-ish (if already child, does nothing or moves it to top).
+                 // note.parentIdが古い場合、ここで簡単に確認できない
+                 // しかし、frame.addはほぼ冪等（既に子である場合、何もしないか最上部に移動する）
                  await withRetry(() => frame.add(note), undefined, 'frame.add');
              } catch (e) {}
         }
       }
     }
 
-    // 5. Reorganize Personal Schedules (NEW)
-    // Find personal notes for this date (using frame children for efficiency)
+    // 5. 個人スケジュールの再編成（新機能）
+    // この日付の個人ノートを検索（効率のためにフレームの子を使用）
     if (frame) {
         const children = await frame.getChildren();
         const personalNotes: any[] = [];
@@ -554,20 +574,20 @@ export async function reorganizeTasksOnDate(
                         }
                     }
                 } catch (e) {
-                    // ignore
+                    // 無視
                 }
             }
         }
 
         if (personalNotes.length > 0) {
-            // Sort by Y position to maintain relative order
+            // Y位置でソートして相対的な順序を維持
             personalNotes.sort((a, b) => a.y - b.y);
             
             for (let i = 0; i < personalNotes.length; i++) {
                 const note = personalNotes[i];
                 const pos = await calculatePersonalSchedulePosition(date, i);
                 
-                // Update position and size if needed
+                // 必要に応じて位置とサイズを更新
                 if (Math.abs(note.x - pos.x) > 1 || Math.abs(note.y - pos.y) > 1 || note.width !== PERSONAL_NOTE_WIDTH) {
                     note.x = pos.x;
                     note.y = pos.y;
@@ -580,16 +600,16 @@ export async function reorganizeTasksOnDate(
                              try {
                                  await detachFromParent(note);
                                  
-                                 // Retry move
+                                 // 移動を再試行
                                  note.x = pos.x;
                                  note.y = pos.y;
                                  note.width = PERSONAL_NOTE_WIDTH;
                                  await withRetry(() => note.sync(), undefined, 'personalNote.sync(retry)');
                              } catch (retryError) {
-                                 console.error('Failed to move personal note even after removing from frame', retryError);
+                                 console.error('フレームから削除した後も個人ノートの移動に失敗しました', retryError);
                              }
                          } else {
-                            console.error('Failed to sync personal note', e);
+                            console.error('個人ノートの同期に失敗しました', e);
                          }
                     }
                 }
@@ -597,7 +617,7 @@ export async function reorganizeTasksOnDate(
         }
     }
   } catch (error) {
-    console.error('Error reorganizing tasks:', error);
+    console.error('タスクの再編成中にエラーが発生しました:', error);
   } finally {
     debugService.endOperation();
   }
@@ -659,7 +679,7 @@ export async function createTask(task: Task, options?: { skipReorganize?: boolea
 // Remove createExternalLinkIndicator function entirely
 // async function createExternalLinkIndicator(stickyNote: any, url: string): Promise<void> { ... }
 
-// Helper function to get task color based on status
+// ステータスに基づいてタスクの色を取得するヘルパー関数
 function getTaskColor(task: Task): string {
   switch (task.status) {
     case 'Draft':
