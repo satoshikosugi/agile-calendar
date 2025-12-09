@@ -124,8 +124,34 @@ async function processBatch(items: any[]) {
                     
                     // 利用可能な場合はイベントトリガー（クライアント側）の座標を使用、そうでなければサーバー側にフォールバック
                     // これにより、board.get()がドラッグ操作中に古い座標を返す問題を修正
-                    const targetX = (typeof item.x === 'number') ? item.x : freshItem.x;
-                    const targetY = (typeof item.y === 'number') ? item.y : freshItem.y;
+                    let targetX = (typeof item.x === 'number') ? item.x : freshItem.x;
+                    let targetY = (typeof item.y === 'number') ? item.y : freshItem.y;
+
+                    // 重要: アイテムがフレームの子である場合、座標は相対座標の可能性がある
+                    // その場合は絶対座標に変換する必要がある
+                    if (freshItem.parentId) {
+                        try {
+                            const parentItems = await withRetry<any[]>(() => miro.board.get({ id: freshItem.parentId }), undefined, 'board.get(parentId)');
+                            if (parentItems && parentItems.length > 0) {
+                                const parent = parentItems[0];
+                                if (parent.type === 'frame') {
+                                    // 相対座標を絶対座標に変換
+                                    // ただし、item.xが既に絶対座標の場合（ドラッグ中）はそのまま使用
+                                    // freshItem.xは相対座標の可能性がある
+                                    // item.xとfreshItem.xを比較して判断
+                                    const isAbsolute = Math.abs(targetX) > 1000; // 絶対座標は通常大きな値
+                                    if (!isAbsolute && freshItem.x === targetX) {
+                                        // 相対座標なので変換
+                                        targetX = parent.x + freshItem.x;
+                                        targetY = parent.y + freshItem.y;
+                                        console.log(`座標を相対→絶対に変換: (${freshItem.x}, ${freshItem.y}) -> (${targetX}, ${targetY})`);
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('親フレームの取得に失敗:', e);
+                        }
+                    }
 
                     // 修正: 移動前に親から切り離して「別のアイテムの子」エラーを回避
                     // これはMiro SDKがフレームの子であるアイテムの移動を制限するため必要
@@ -140,6 +166,7 @@ async function processBatch(items: any[]) {
 
                     // 位置に基づいて新しい日付を計算
                     // 古いparentIdを無視して空間検索を強制するため、itemにundefinedを渡す
+                    console.log(`タスク ${task.title} の日付を計算中: 座標 (${targetX}, ${targetY})`);
                     const newDate = await getDateFromPosition(targetX, targetY, undefined);
                     
                     if (newDate) {

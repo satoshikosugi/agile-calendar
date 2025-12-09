@@ -193,6 +193,8 @@ const App: React.FC = () => {
                       // Keep track of consecutive empty selections to prevent premature stopping
                       let emptySelectionCount = 0;
                       let isPolling = false;
+                      let consecutiveErrors = 0;
+                      const MAX_CONSECUTIVE_ERRORS = 3;
 
                       intervalId = setInterval(async () => {
                           if (isPolling) return;
@@ -205,6 +207,9 @@ const App: React.FC = () => {
                                   undefined, 
                                   'board.getSelection(poll)'
                               );
+                              
+                              // リセット成功カウンター
+                              consecutiveErrors = 0;
                               
                               // Handle empty selection grace period
                               if (currentSelection.length === 0) {
@@ -286,7 +291,7 @@ const App: React.FC = () => {
                                   if (!currentIds.has(id)) {
                                       const tracked = trackedItemsRef.current.get(id);
                                       if (tracked && tracked.type === 'sticky_note') {
-                                          console.log('Item deselected (dropped), triggering move:', id);
+                                          console.log('アイテムが選択解除されました（ドロップ）、移動をトリガーします:', id);
                                           // Pass last known coordinates to ensure accurate placement
                                           itemsToMove.push({ 
                                               id, 
@@ -300,22 +305,26 @@ const App: React.FC = () => {
                               }
 
                               if (itemsToMove.length > 0) {
-                                  console.log('Calling handleTaskMove with', itemsToMove.length, 'items');
+                                  console.log('handleTaskMoveを呼び出します。アイテム数:', itemsToMove.length);
                                   await handleTaskMove(itemsToMove);
                               }
 
                               // Stop polling logic moved to top of loop with grace period
 
                           } catch (e) {
-                              console.error('Error in polling loop:', e);
-                              // Only stop loop if it's a fatal error, not a transient one (retry handles rate limits)
-                              // But if withRetry failed after max retries, we should probably stop to avoid infinite loop
-                              if (intervalId) {
-                                  clearInterval(intervalId);
-                                  intervalId = null;
+                              consecutiveErrors++;
+                              console.error(`ポーリングループでエラーが発生しました (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, e);
+                              
+                              // 連続エラーが閾値を超えたら、無限ループを防ぐためにポーリングを停止
+                              if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                                  console.error('連続エラーが多すぎます。API呼び出しを停止してポーリングループを終了します。');
+                                  if (intervalId) {
+                                      clearInterval(intervalId);
+                                      intervalId = null;
+                                  }
+                                  // Clear tracking to prevent stale state
+                                  trackedItemsRef.current.clear();
                               }
-                              // Clear tracking to prevent stale state
-                              trackedItemsRef.current.clear();
                           } finally {
                               isPolling = false;
                           }
