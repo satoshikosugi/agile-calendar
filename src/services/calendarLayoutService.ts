@@ -711,15 +711,19 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
               const dayIndex = row * 7 + col - firstDayOfWeek + 1;
               const daysInMonth = new Date(year, month + 1, 0).getDate();
               
+              console.log(`日付計算: row=${row}, col=${col}, firstDayOfWeek=${firstDayOfWeek}, dayIndex=${dayIndex}, daysInMonth=${daysInMonth}`);
+              
               if (dayIndex >= 1 && dayIndex <= daysInMonth) {
                   const mStr = (month + 1).toString().padStart(2, '0');
                   const dStr = dayIndex.toString().padStart(2, '0');
                   const dateStr = `${year}-${mStr}-${dStr}`;
-                  console.log(`Found date via Math Calculation: ${dateStr} (row=${row}, col=${col})`);
+                  console.log(`数学計算で日付を特定: ${dateStr} (row=${row}, col=${col})`);
                   return dateStr;
               } else {
-                  console.log(`Math calculated dayIndex ${dayIndex} which is out of range (1-${daysInMonth})`);
+                  console.log(`数学計算でdayIndex ${dayIndex}が範囲外です (1-${daysInMonth})`);
               }
+          } else {
+              console.log(`相対位置が範囲外: relX=${relX.toFixed(2)}, relY=${relY.toFixed(2)}, frameWidth=${frameWidth}, contentHeight=${(numWeeks * rowHeight).toFixed(2)}`);
           }
       }
   } catch (e) {
