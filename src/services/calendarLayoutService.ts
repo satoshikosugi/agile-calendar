@@ -624,7 +624,12 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
           const headerHeight = frameHeight * (160 / ORIGINAL_HEIGHT);
           const dayOfWeekHeaderHeight = frameHeight * (80 / ORIGINAL_HEIGHT);
           
-          const colWidth = frameWidth / 6; // 6 columns (Mon-Fri + Weekly)
+          // Determine columns based on width (Standard col width is 700)
+          // Old frames (5600) have 8 cols. New frames (4200) have 6 cols.
+          const STANDARD_COL_WIDTH = 700;
+          const numCols = Math.round(frameWidth / STANDARD_COL_WIDTH);
+          const colWidth = frameWidth / numCols;
+          
           const numWeeks = 6;
           const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
           
@@ -638,21 +643,48 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
               const col = Math.floor(relX / colWidth);
               const row = Math.floor(relY / rowHeight);
               
-              // Handle Weekly column (col 5)
-              if (col === 5) {
+              // Handle Weekly column (last column)
+              if (col === numCols - 1) {
                   console.log('Dropped in Weekly column - ignoring for now');
                   return null;
               }
 
               // Calculate Date
               const firstDay = new Date(year, month, 1);
-              // Adjust firstDayOfWeek to Mon=0, Sun=6
-              const firstDayOfWeek = (firstDay.getDay() + 6) % 7;
               
-              // absoluteCol = row * 7 + col
-              // dayIndex = absoluteCol - firstDayOfWeek + 1
-              const absoluteCol = row * 7 + col;
-              const dayIndex = absoluteCol - firstDayOfWeek + 1;
+              // Adjust firstDayOfWeek logic based on layout
+              // If 8 cols (Old): Sun(0)..Sat(6), Weekly(7). firstDayOfWeek is standard (Sun=0).
+              // If 6 cols (New): Mon(0)..Fri(4), Weekly(5). firstDayOfWeek needs adjustment (Mon=0).
+              
+              let dayIndex = -1;
+              
+              if (numCols === 8) {
+                  // Old Layout: Sun, Mon, Tue, Wed, Thu, Fri, Sat, Weekly
+                  const firstDayOfWeek = firstDay.getDay(); // Sun=0
+                  // absoluteCol = row * 7 + col? No, row * 7 is for 7-day weeks.
+                  // But the grid has 8 columns.
+                  // Actually old logic was: dayIndex = row * 7 + col - firstDayOfWeek + 1
+                  // And it skipped col 7 (Weekly).
+                  if (col < 7) {
+                      dayIndex = row * 7 + col - firstDayOfWeek + 1;
+                  }
+              } else {
+                  // New Layout: Mon, Tue, Wed, Thu, Fri, Weekly
+                  // Skips Sat/Sun.
+                  // Mon=0, Sun=6.
+                  const firstDayOfWeek = (firstDay.getDay() + 6) % 7; 
+                  
+                  // absoluteCol = row * 7 + col?
+                  // No, we need to map grid col (0-4) to absolute day offset.
+                  // Grid Col 0 = Mon.
+                  // If first day is Wed (2), then absolute col of 1st is 2.
+                  // Grid Col 0 (Mon) of that week is absolute col 0.
+                  
+                  // absoluteCol = row * 7 + col
+                  const absoluteCol = row * 7 + col;
+                  dayIndex = absoluteCol - firstDayOfWeek + 1;
+              }
+
               const daysInMonth = new Date(year, month + 1, 0).getDate();
               
               if (dayIndex >= 1 && dayIndex <= daysInMonth) {
