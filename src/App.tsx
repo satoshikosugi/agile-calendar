@@ -227,7 +227,7 @@ const App: React.FC = () => {
                       const poll = async () => {
                           if (isPolling) return;
                           isPolling = true;
-                          let nextPollDelay = 250; // Default delay
+                          let nextPollDelay = 1000; // Default delay: 1 second
 
                           try {
                               // Re-fetch selection to get current positions
@@ -241,12 +241,12 @@ const App: React.FC = () => {
                               // Handle empty selection grace period
                               if (currentSelection.length === 0) {
                                   emptySelectionCount++;
-                                  if (emptySelectionCount < 5) { // Wait for 5 consecutive empty polls
-                                      intervalId = setTimeout(poll, 250);
+                                  if (emptySelectionCount < 2) { // Wait for 2 consecutive empty polls (2s)
+                                      intervalId = setTimeout(poll, 1000);
                                       return;
                                   }
                                   // If we reached here, it's truly empty (Drop detected)
-                                  console.log('No items selected for 1.25s. Processing drops and stopping loop.');
+                                  console.log('No items selected for 2s. Processing drops and stopping loop.');
                                   
                                   const droppedItems: any[] = [];
                                   for (const [id, tracked] of trackedItemsRef.current.entries()) {
@@ -298,20 +298,21 @@ const App: React.FC = () => {
                                           // even if the movement was small
                                           tracked.x = item.x;
                                           tracked.y = item.y;
-
-                                          // Trigger move if stable for ~1 second (4 * 250ms = 1000ms)
-                                          if (tracked.stableCount === 4) { 
-                                              if (item.type === 'sticky_note') {
-                                                  console.log('Item stable, triggering move:', item.id);
-                                                  itemsToMove.push(item);
-                                              }
-                                          }
+                                          
+                                          // We rely on the 5s debounce in tasksService to handle stability.
+                                          // We don't need to trigger move here if stable, 
+                                          // because the timer is already running from the last move.
                                       } else {
                                           // console.log(`Item ${item.id} moved: dx=${dx}, dy=${dy}`);
                                           tracked.x = item.x;
                                           tracked.y = item.y;
                                           tracked.stableCount = 0;
                                           hasMovement = true;
+                                          
+                                          // Trigger move on movement to reset the debounce timer
+                                          if (item.type === 'sticky_note') {
+                                              itemsToMove.push(item);
+                                          }
                                       }
                                   }
                               }
@@ -338,11 +339,11 @@ const App: React.FC = () => {
                               // Adaptive Polling Logic
                               if (hasMovement) {
                                   stableCycles = 0;
-                                  nextPollDelay = 250; // Fast polling when moving
+                                  nextPollDelay = 1000; // 1s polling when moving
                               } else {
                                   stableCycles++;
-                                  if (stableCycles > 10) { // Stable for ~2.5s
-                                      nextPollDelay = 2000; // Slow polling (2s) to save API calls
+                                  if (stableCycles > 1) { // Stable for > 1 cycle (1s)
+                                      nextPollDelay = 2500; // Slow polling (2.5s) to save API calls
                                       // console.log('Selection stable, slowing down polling...');
                                   }
                               }
