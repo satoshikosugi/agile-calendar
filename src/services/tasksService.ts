@@ -16,7 +16,7 @@ const taskDateCache = new Map<string, string>();
 let moveDebounceTimer: any = null;
 let isProcessingMoves = false;
 const pendingMoveItems = new Map<string, any>();
-const MOVE_DEBOUNCE_MS = 5000; // Reduced to 5000ms for snappy response on drop
+const MOVE_DEBOUNCE_MS = 200; // Reduced to 200ms for snappy response on drop
 
 // Handle task movement on the board
 export async function handleTaskMove(items: any[]): Promise<void> {
@@ -93,101 +93,110 @@ async function processBatch(items: any[]) {
         // const settings = await loadSettings(); // Unused
 
         try {
-            // 1. Update all tasks and collect affected dates
-            for (const item of items) {
-                // Check if this item has a newer pending move
-                if (pendingMoveItems.has(item.id)) {
-                    console.log(`Skipping task ${item.id} in current batch because a newer move is pending.`);
-                    continue;
-                }
+            // Optimization: Fetch all items in parallel to reduce latency
+            // We use a concurrency limit to avoid rate limits
+            const CONCURRENCY = 5;
+            const chunks = [];
+            for (let i = 0; i < items.length; i += CONCURRENCY) {
+                chunks.push(items.slice(i, i + CONCURRENCY));
+            }
 
-                try {
-                    // Re-fetch item to ensure we have the latest metadata/methods
-                    const freshItems = await withRetry<any[]>(() => miro.board.get({ id: item.id }), undefined, 'board.get(id)');
-                    if (!freshItems || freshItems.length === 0) continue;
-                    
-                    const freshItem = freshItems[0];
-                    const metadata = await freshItem.getMetadata(TASK_METADATA_KEY);
-                    
-                    if (!metadata || !(metadata as Task).id) continue;
-                    
-                    const task = metadata as Task;
-                    
-                    // Use cached date if available (to handle rapid moves across batches), otherwise use metadata
-                    const cachedDate = taskDateCache.get(task.id);
-                    const oldDate = cachedDate || task.date;
-                    
-                    // Track that this task is being moved
-                    movedTaskIds.add(task.id);
-                    
-                    // Use coordinates from the event trigger (client-side) if available, otherwise fallback to server-side
-                    // This fixes the issue where board.get() returns stale coordinates during drag operations
-                    const targetX = (typeof item.x === 'number') ? item.x : freshItem.x;
-                    const targetY = (typeof item.y === 'number') ? item.y : freshItem.y;
-
-                    // FIX: Detach from parent before moving to avoid "child of another item" error
-                    // This is necessary because Miro SDK restricts moving items that are children of frames
-                    if (freshItem.parentId) {
-                        await detachFromParent(freshItem);
+            for (const chunk of chunks) {
+                await Promise.all(chunk.map(async (item: any) => {
+                    // Check if this item has a newer pending move
+                    if (pendingMoveItems.has(item.id)) {
+                        console.log(`Skipping task ${item.id} in current batch because a newer move is pending.`);
+                        return;
                     }
 
-                    // CRITICAL FIX: Update the freshItem's coordinates to match the client-side coordinates
-                    // This prevents sync() from reverting the position to the stale server-side values
-                    freshItem.x = targetX;
-                    freshItem.y = targetY;
+                    try {
+                        // Re-fetch item to ensure we have the latest metadata/methods
+                        const freshItems = await withRetry<any[]>(() => miro.board.get({ id: item.id }), undefined, 'board.get(id)');
+                        if (!freshItems || freshItems.length === 0) return;
+                        
+                        const freshItem = freshItems[0];
+                        const metadata = await freshItem.getMetadata(TASK_METADATA_KEY);
+                        
+                        if (!metadata || !(metadata as Task).id) return;
+                        
+                        const task = metadata as Task;
+                        
+                        // Use cached date if available (to handle rapid moves across batches), otherwise use metadata
+                        const cachedDate = taskDateCache.get(task.id);
+                        const oldDate = cachedDate || task.date;
+                        
+                        // Track that this task is being moved
+                        movedTaskIds.add(task.id);
+                        
+                        // Use coordinates from the event trigger (client-side) if available, otherwise fallback to server-side
+                        // This fixes the issue where board.get() returns stale coordinates during drag operations
+                        const targetX = (typeof item.x === 'number') ? item.x : freshItem.x;
+                        const targetY = (typeof item.y === 'number') ? item.y : freshItem.y;
 
-                    // Calculate new date based on position
-                    // Pass undefined for item to force spatial search for frame, ignoring any stale parentId
-                    const newDate = await getDateFromPosition(targetX, targetY, undefined);
-                    
-                    if (newDate) {
-                        if (newDate !== oldDate) {
-                            console.log(`Task ${task.title} moved from ${oldDate} to ${newDate}`);
-                            
-                            // Update task date
-                            const updatedTask = { ...task, date: newDate };
-                            
-                            // Update cache immediately
-                            taskDateCache.set(task.id, newDate);
-                            
-                            // Update metadata only (skip full updateStickyNoteProperties to avoid double sync)
-                            // reorganizeTasksOnDate will handle the full update and sync
-                            await withRetry(() => freshItem.setMetadata(TASK_METADATA_KEY, updatedTask), undefined, 'note.setMetadata(task)');
-                            
-                            // CRITICAL FIX: Explicitly add to the new date's frame
-                            // This ensures reorganizeTasksOnDate finds it via frame.getChildren()
-                            const dateObj = new Date(newDate);
-                            const frame = await getCalendarFrame(dateObj.getFullYear(), dateObj.getMonth());
-                            if (frame) {
-                                await withRetry(() => frame.add(freshItem), undefined, 'frame.add');
-                            }
-
-                            // Track moved item
-                            if (!movedItemsByDate.has(newDate)) {
-                                movedItemsByDate.set(newDate, []);
-                            }
-                            movedItemsByDate.get(newDate)!.push({ note: freshItem, task: updatedTask });
-
-                            if (oldDate) affectedDates.add(oldDate);
-                            affectedDates.add(newDate);
-                        } else {
-                            console.log(`Task ${task.title} moved but stayed on same date ${oldDate}`);
-                            
-                            // Track moved item (even if same date, to ensure it's included in layout)
-                            if (!movedItemsByDate.has(oldDate)) {
-                                movedItemsByDate.set(oldDate, []);
-                            }
-                            movedItemsByDate.get(oldDate)!.push({ note: freshItem, task: task });
-
-                            // Still add to affected dates to ensure snapping happens
-                            affectedDates.add(oldDate);
+                        // FIX: Detach from parent before moving to avoid "child of another item" error
+                        // This is necessary because Miro SDK restricts moving items that are children of frames
+                        if (freshItem.parentId) {
+                            await detachFromParent(freshItem);
                         }
-                    } else {
-                        console.warn(`Could not determine date for task ${task.title} at (${targetX}, ${targetY})`);
+
+                        // CRITICAL FIX: Update the freshItem's coordinates to match the client-side coordinates
+                        // This prevents sync() from reverting the position to the stale server-side values
+                        freshItem.x = targetX;
+                        freshItem.y = targetY;
+
+                        // Calculate new date based on position
+                        // Pass undefined for item to force spatial search for frame, ignoring any stale parentId
+                        const newDate = await getDateFromPosition(targetX, targetY, undefined);
+                        
+                        if (newDate) {
+                            if (newDate !== oldDate) {
+                                console.log(`Task ${task.title} moved from ${oldDate} to ${newDate}`);
+                                
+                                // Update task date
+                                const updatedTask = { ...task, date: newDate };
+                                
+                                // Update cache immediately
+                                taskDateCache.set(task.id, newDate);
+                                
+                                // Update metadata only (skip full updateStickyNoteProperties to avoid double sync)
+                                // reorganizeTasksOnDate will handle the full update and sync
+                                await withRetry(() => freshItem.setMetadata(TASK_METADATA_KEY, updatedTask), undefined, 'note.setMetadata(task)');
+                                
+                                // CRITICAL FIX: Explicitly add to the new date's frame
+                                // This ensures reorganizeTasksOnDate finds it via frame.getChildren()
+                                const dateObj = new Date(newDate);
+                                const frame = await getCalendarFrame(dateObj.getFullYear(), dateObj.getMonth());
+                                if (frame) {
+                                    await withRetry(() => frame.add(freshItem), undefined, 'frame.add');
+                                }
+
+                                // Track moved item
+                                if (!movedItemsByDate.has(newDate)) {
+                                    movedItemsByDate.set(newDate, []);
+                                }
+                                movedItemsByDate.get(newDate)!.push({ note: freshItem, task: updatedTask });
+
+                                if (oldDate) affectedDates.add(oldDate);
+                                affectedDates.add(newDate);
+                            } else {
+                                console.log(`Task ${task.title} moved but stayed on same date ${oldDate}`);
+                                
+                                // Track moved item (even if same date, to ensure it's included in layout)
+                                if (!movedItemsByDate.has(oldDate)) {
+                                    movedItemsByDate.set(oldDate, []);
+                                }
+                                movedItemsByDate.get(oldDate)!.push({ note: freshItem, task: task });
+
+                                // Still add to affected dates to ensure snapping happens
+                                affectedDates.add(oldDate);
+                            }
+                        } else {
+                            console.warn(`Could not determine date for task ${task.title} at (${targetX}, ${targetY})`);
+                        }
+                    } catch (e) {
+                        console.error('Error processing individual item move:', e);
                     }
-                } catch (e) {
-                    console.error('Error processing individual item move:', e);
-                }
+                }));
             }
 
             // 2. Reorganize affected dates

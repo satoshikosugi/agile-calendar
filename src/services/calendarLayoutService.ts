@@ -445,8 +445,8 @@ export async function calculateTaskPosition(
   if (numCols === 8) {
       // Old Layout: Sun(0)..Sat(6), Weekly(7)
       const firstDayOfWeek = firstDay.getDay(); // Sun=0
-      const daysSinceFirstOfMonth = day - 1;
-      absoluteCol = firstDayOfWeek + daysSinceFirstOfMonth;
+      // const daysSinceFirstOfMonth = day - 1;
+      // absoluteCol = firstDayOfWeek + daysSinceFirstOfMonth;
       
       // If absoluteCol hits Weekly column (7, 15, 23...), we need to skip it?
       // No, in Old Layout, Weekly is a separate column at the end of the row.
@@ -468,7 +468,7 @@ export async function calculateTaskPosition(
       // New Layout: Mon(0)..Fri(4), Weekly(5)
       // Mon=0, Sun=6.
       const firstDayOfWeek = (firstDay.getDay() + 6) % 7;
-      const daysSinceFirstOfMonth = day - 1;
+      // const daysSinceFirstOfMonth = day - 1;
       
       // dayIndex = absoluteCol - firstDayOfWeek + 1
       // => absoluteCol = dayIndex + firstDayOfWeek - 1
