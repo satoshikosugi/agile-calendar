@@ -403,11 +403,13 @@ export async function calculateTaskPosition(
   // Try to find the actual frame on the board first
   let frameX = 0;
   let frameY = 0;
+  let actualFrameWidth = CALENDAR_FRAME_WIDTH;
   const frame = await getCalendarFrame(year, month);
 
   if (frame) {
     frameX = frame.x;
     frameY = frame.y;
+    actualFrameWidth = frame.width;
   } else {
     // Fallback to calculation based on fixed epoch
     // Calculate month difference to determine which frame
@@ -425,17 +427,53 @@ export async function calculateTaskPosition(
   }
   
   // Frame constants
-  const frameWidth = CALENDAR_FRAME_WIDTH;
+  const frameWidth = actualFrameWidth;
   const frameHeight = CALENDAR_FRAME_HEIGHT;
   
   // Calculate position within the monthly calendar grid
   
   // Find which week and day of week this date is
   const firstDay = new Date(year, month, 1);
-  // Adjust firstDayOfWeek to Mon=0, Sun=6
-  const firstDayOfWeek = (firstDay.getDay() + 6) % 7;
-  const daysSinceFirstOfMonth = day - 1;
-  const absoluteCol = firstDayOfWeek + daysSinceFirstOfMonth;
+  
+  // Determine layout based on width
+  const STANDARD_COL_WIDTH = 700;
+  const numCols = Math.round(frameWidth / STANDARD_COL_WIDTH);
+  const colWidth = frameWidth / numCols;
+  
+  let absoluteCol = 0;
+  
+  if (numCols === 8) {
+      // Old Layout: Sun(0)..Sat(6), Weekly(7)
+      const firstDayOfWeek = firstDay.getDay(); // Sun=0
+      const daysSinceFirstOfMonth = day - 1;
+      absoluteCol = firstDayOfWeek + daysSinceFirstOfMonth;
+      
+      // If absoluteCol hits Weekly column (7, 15, 23...), we need to skip it?
+      // No, in Old Layout, Weekly is a separate column at the end of the row.
+      // But the date logic was: dayIndex = row * 7 + col - firstDayOfWeek + 1
+      // So dates are contiguous in the first 7 columns.
+      
+      // We need to map date -> (row, col)
+      // dayIndex = row * 7 + col - firstDayOfWeek + 1
+      // => row * 7 + col = dayIndex + firstDayOfWeek - 1
+      const targetIndex = day - 1 + firstDayOfWeek;
+      const row = Math.floor(targetIndex / 7);
+      const col = targetIndex % 7;
+      
+      // This maps to 0..6. Weekly is 7.
+      // So tasks never go to Weekly automatically unless we have special logic.
+      absoluteCol = row * 8 + col; // 8 columns in grid
+      
+  } else {
+      // New Layout: Mon(0)..Fri(4), Weekly(5)
+      // Mon=0, Sun=6.
+      const firstDayOfWeek = (firstDay.getDay() + 6) % 7;
+      const daysSinceFirstOfMonth = day - 1;
+      
+      // dayIndex = absoluteCol - firstDayOfWeek + 1
+      // => absoluteCol = dayIndex + firstDayOfWeek - 1
+      absoluteCol = day - 1 + firstDayOfWeek;
+  }
   
   const weekRow = Math.floor(absoluteCol / 7);
   const dayOfWeek = absoluteCol % 7;
@@ -443,7 +481,7 @@ export async function calculateTaskPosition(
   // Calendar layout constants (must match createMonthlyCalendarGrid)
   const headerHeight = 160;
   const dayOfWeekHeaderHeight = 80;
-  const colWidth = frameWidth / 6; // 6 columns
+  // const colWidth = frameWidth / 6; // Already calculated above
   const numWeeks = 6;
   const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
   
@@ -656,10 +694,14 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
           row = Math.max(0, Math.min(row, numWeeks - 1));
           
           // Handle Weekly column (last column)
+          // We now ALLOW drops in the Weekly column, mapping them to the corresponding date (usually Saturday)
+          // This ensures that tasks dropped in the rightmost column are not ignored.
+          /*
           if (col === numCols - 1) {
               console.log('Dropped in Weekly column - ignoring for now');
               return null;
           }
+          */
 
           // Calculate Date
               const firstDay = new Date(year, month, 1);
