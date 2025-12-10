@@ -16,7 +16,7 @@ const taskDateCache = new Map<string, string>();
 let moveDebounceTimer: any = null;
 let isProcessingMoves = false;
 const pendingMoveItems = new Map<string, any>();
-const MOVE_DEBOUNCE_MS = 200; // Reduced to 200ms for snappy response on drop
+const MOVE_DEBOUNCE_MS = 5000; // Wait 5 seconds to aggregate all moves
 
 // Handle task movement on the board
 export async function handleTaskMove(items: any[]): Promise<void> {
@@ -24,22 +24,14 @@ export async function handleTaskMove(items: any[]): Promise<void> {
   try {
     console.log('handleTaskMove called with', items.length, 'items');
     
-    // Add items to pending map
+    // Add items to pending map (overwriting existing entries ensures we only keep the latest state)
     for (const item of items) {
-        // Only track sticky notes
         if (item.type === 'sticky_note') {
             pendingMoveItems.set(item.id, item);
         }
     }
 
-    // If processing is already in progress, just queue and return.
-    // The processing loop will pick up the new items after the current batch.
-    if (isProcessingMoves) {
-        console.log(`Move processing in progress. Queued ${items.length} items for next batch.`);
-        return;
-    }
-
-    // Reset timer
+    // Always reset timer to ensure we wait for the user to stop moving
     if (moveDebounceTimer) {
         clearTimeout(moveDebounceTimer);
     }
@@ -56,33 +48,40 @@ export async function handleTaskMove(items: any[]): Promise<void> {
 
 // Process queued moves in batch
 async function processPendingMoves() {
-    if (isProcessingMoves) return;
+    // If already processing, we can't start a new batch yet.
+    // But since we reset the timer in handleTaskMove, this function is only called
+    // when the timer expires (i.e., silence).
+    // However, if the previous batch is taking > 5s, we might overlap.
+    if (isProcessingMoves) {
+        console.log('Processing already in progress. Rescheduling check...');
+        moveDebounceTimer = setTimeout(processPendingMoves, 1000);
+        return;
+    }
+
     isProcessingMoves = true;
     debugService.startOperation('processPendingMoves');
     
     try {
-        // Loop until queue is empty
-        do {
-            console.log('Processing pending moves batch...');
-            const items = Array.from(pendingMoveItems.values());
-            pendingMoveItems.clear();
-            moveDebounceTimer = null;
+        console.log('Processing pending moves batch...');
+        
+        // Take a snapshot of the queue and clear it
+        // This ensures we process exactly what was pending at the moment of timeout
+        const items = Array.from(pendingMoveItems.values());
+        pendingMoveItems.clear();
+        moveDebounceTimer = null;
 
-            if (items.length > 0) {
-                await processBatch(items);
-            }
-            
-            // If new items arrived during processing, the loop will continue
-            if (pendingMoveItems.size > 0) {
-                console.log(`Found ${pendingMoveItems.size} new items in queue. Continuing processing...`);
-            }
-        } while (pendingMoveItems.size > 0);
-
+        if (items.length > 0) {
+            await processBatch(items);
+        }
+        
     } catch (error) {
         console.error('Error in processPendingMoves:', error);
     } finally {
         isProcessingMoves = false;
         debugService.endOperation();
+        
+        // If new items arrived during processing (unlikely with 5s debounce, but possible),
+        // handleTaskMove would have set a new timer. So we don't need to loop here.
     }
 }
 
