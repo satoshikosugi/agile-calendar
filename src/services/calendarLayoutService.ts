@@ -700,38 +700,10 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
       console.warn('Error performing math calculation for date:', e);
   }
 
-  // Strategy D: Hit Testing (Fallback)
-  // Only use this if math failed (e.g. weird frame title or layout)
-  try {
-      console.log('Math strategy failed or returned no date, trying Hit Testing...');
-      const children = await withRetry<any[]>(() => frame.getChildren(), undefined, 'frame.getChildren');
-      // Filter for shapes (cells) that contain the point
-      const candidates = children.filter((c: any) => {
-          if (c.type !== 'shape') return false;
-          const left = c.x - c.width / 2;
-          const right = c.x + c.width / 2;
-          const top = c.y - c.height / 2;
-          const bottom = c.y + c.height / 2;
-          return x >= left && x <= right && y >= top && y <= bottom;
-      });
-
-      for (const cell of candidates) {
-          try {
-              const appType = await withRetry(() => cell.getMetadata('appType'), undefined, 'cell.getMetadata(appType)');
-              if (appType === 'calendarCell') {
-                  const date = await withRetry(() => cell.getMetadata('date'), undefined, 'cell.getMetadata(date)');
-                  if (date) {
-                      console.log(`Found calendar cell via hit-testing at (${x}, ${y}) with date ${date}`);
-                      return date as string;
-                  }
-              }
-          } catch (e) {
-              // ignore metadata errors
-          }
-      }
-  } catch (e) {
-      console.warn('Error performing hit testing for calendar cells:', e);
-  }
+  // Strategy D: Hit Testing (Fallback) - REMOVED
+  // We removed individual cell shapes to optimize performance, so hit-testing against them is no longer possible/useful.
+  // Also, fetching frame.getChildren() is too expensive (API rate limits).
+  // If Math strategy fails, we simply cannot determine the date.
   
   return null;
 }
