@@ -586,7 +586,10 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
         const top = f.y - f.height / 2;
         const bottom = f.y + f.height / 2;
         
-        const isInside = x >= left && x <= right && y >= top && y <= bottom;
+        // Add buffer for edge drops (e.g. 50px)
+        const BUFFER = 50;
+        const isInside = x >= left - BUFFER && x <= right + BUFFER && y >= top - BUFFER && y <= bottom + BUFFER;
+
         if (isInside) {
             console.log(`Found frame match: ${f.title} [${left}, ${right}, ${top}, ${bottom}]`);
         }
@@ -639,9 +642,16 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
           const relX = x - (frame.x - frameWidth / 2);
           const relY = y - contentStartY;
           
-          if (relX >= 0 && relX <= frameWidth && relY >= 0 && relY <= numWeeks * rowHeight) {
-              const col = Math.floor(relX / colWidth);
-              const row = Math.floor(relY / rowHeight);
+          // Add buffer for edge drops (e.g. 50px)
+          const BUFFER = 50;
+          
+          if (relX >= -BUFFER && relX <= frameWidth + BUFFER && relY >= -BUFFER && relY <= numWeeks * rowHeight + BUFFER) {
+              let col = Math.floor(relX / colWidth);
+              let row = Math.floor(relY / rowHeight);
+              
+              // Clamp to valid range to handle buffered drops
+              col = Math.max(0, Math.min(col, numCols - 1));
+              row = Math.max(0, Math.min(row, numWeeks - 1));
               
               // Handle Weekly column (last column)
               if (col === numCols - 1) {
