@@ -433,7 +433,7 @@ export async function reorganizeTasksOnDate(
 
                         const calculatedDate = await getDateFromPosition(checkX, checkY, note, frame);
                         if (calculatedDate === date) {
-                            console.log(`Self-healing task ${task.title}: metadata=${task.date}, actual=${date}`);
+                            // console.log(`Self-healing task ${task.title}: metadata=${task.date}, actual=${date}`);
                             // Update metadata to match reality
                             task.date = date;
                             // We don't await this to speed up, it will be synced in updateStickyNoteProperties later

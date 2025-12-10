@@ -692,7 +692,7 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
               const dStr = targetDate.getDate().toString().padStart(2, '0');
               const dateStr = `${targetDate.getFullYear()}-${mStr}-${dStr}`;
               
-              console.log(`Found date via Math Calculation: ${dateStr} (row=${row}, col=${col}, dayIndex=${dayIndex})`);
+              // console.log(`Found date via Math Calculation: ${dateStr} (row=${row}, col=${col}, dayIndex=${dayIndex})`);
               return dateStr;
           }
       }
