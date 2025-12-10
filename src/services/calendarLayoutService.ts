@@ -642,24 +642,26 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
           const relX = x - (frame.x - frameWidth / 2);
           const relY = y - contentStartY;
           
-          // Add buffer for edge drops (e.g. 50px)
-          const BUFFER = 50;
+          // Relaxed bounds check: Allow drops anywhere within the frame (including headers)
+          // We already confirmed the point is roughly inside the frame via Strategy B.
+          // Just clamp the coordinates to the grid.
           
-          if (relX >= -BUFFER && relX <= frameWidth + BUFFER && relY >= -BUFFER && relY <= numWeeks * rowHeight + BUFFER) {
-              let col = Math.floor(relX / colWidth);
-              let row = Math.floor(relY / rowHeight);
-              
-              // Clamp to valid range to handle buffered drops
-              col = Math.max(0, Math.min(col, numCols - 1));
-              row = Math.max(0, Math.min(row, numWeeks - 1));
-              
-              // Handle Weekly column (last column)
-              if (col === numCols - 1) {
-                  console.log('Dropped in Weekly column - ignoring for now');
-                  return null;
-              }
+          // Calculate row/col (can be negative or > max if in header/footer)
+          let col = Math.floor(relX / colWidth);
+          let row = Math.floor(relY / rowHeight);
+          
+          // Clamp to valid grid range
+          // This ensures drops in the header map to Row 0, and drops in footer map to Last Row
+          col = Math.max(0, Math.min(col, numCols - 1));
+          row = Math.max(0, Math.min(row, numWeeks - 1));
+          
+          // Handle Weekly column (last column)
+          if (col === numCols - 1) {
+              console.log('Dropped in Weekly column - ignoring for now');
+              return null;
+          }
 
-              // Calculate Date
+          // Calculate Date
               const firstDay = new Date(year, month, 1);
               
               // Adjust firstDayOfWeek logic based on layout
@@ -704,7 +706,7 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
               
               // console.log(`Found date via Math Calculation: ${dateStr} (row=${row}, col=${col}, dayIndex=${dayIndex})`);
               return dateStr;
-          }
+          // }
       }
   } catch (e) {
       console.warn('Error performing math calculation for date:', e);
