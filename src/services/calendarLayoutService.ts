@@ -685,17 +685,15 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
                   dayIndex = absoluteCol - firstDayOfWeek + 1;
               }
 
-              const daysInMonth = new Date(year, month + 1, 0).getDate();
+              // Allow overflow/underflow to handle drops in empty cells (prev/next month)
+              // e.g. Dropping in the 6th row of Dec might map to Jan
+              const targetDate = new Date(year, month, dayIndex);
+              const mStr = (targetDate.getMonth() + 1).toString().padStart(2, '0');
+              const dStr = targetDate.getDate().toString().padStart(2, '0');
+              const dateStr = `${targetDate.getFullYear()}-${mStr}-${dStr}`;
               
-              if (dayIndex >= 1 && dayIndex <= daysInMonth) {
-                  const mStr = (month + 1).toString().padStart(2, '0');
-                  const dStr = dayIndex.toString().padStart(2, '0');
-                  const dateStr = `${year}-${mStr}-${dStr}`;
-                  console.log(`Found date via Math Calculation: ${dateStr} (row=${row}, col=${col})`);
-                  return dateStr;
-              } else {
-                  console.log(`Math calculated dayIndex ${dayIndex} which is out of range (1-${daysInMonth})`);
-              }
+              console.log(`Found date via Math Calculation: ${dateStr} (row=${row}, col=${col}, dayIndex=${dayIndex})`);
+              return dateStr;
           }
       }
   } catch (e) {
