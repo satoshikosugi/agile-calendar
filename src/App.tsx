@@ -7,6 +7,7 @@ import CalendarTab from './components/Tabs/CalendarTab';
 import TracksTab from './components/Tabs/TracksTab';
 import SettingsTab from './components/Tabs/SettingsTab';
 import StandupTab from './components/Tabs/StandupTab';
+import ToolsTab from './components/Tabs/ToolsTab';
 import TaskForm from './components/TaskForm';
 import RecurringTaskForm from './components/RecurringTaskForm';
 import { getMiro } from './miro';
@@ -16,7 +17,7 @@ import { withRetry } from './utils/retry';
 import buildInfo from './build-info.json';
 import './App.css';
 
-type ViewMode = 'menu' | 'tasks' | 'calendar' | 'tracks' | 'settings' | 'task-form' | 'standup' | 'recurring-tasks';
+type ViewMode = 'menu' | 'tasks' | 'calendar' | 'tracks' | 'settings' | 'task-form' | 'standup' | 'recurring-tasks' | 'tools';
 
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('menu');
@@ -60,7 +61,7 @@ const App: React.FC = () => {
         } else {
             setTaskFormMode('create');
         }
-      } else if (modeParam && ['tasks', 'calendar', 'tracks', 'settings', 'task-form', 'standup', 'recurring-tasks'].includes(modeParam)) {
+      } else if (modeParam && ['tasks', 'calendar', 'tracks', 'settings', 'task-form', 'standup', 'recurring-tasks', 'tools'].includes(modeParam)) {
         setViewMode(modeParam as ViewMode);
       } else {
         setViewMode('menu');
@@ -431,6 +432,9 @@ const App: React.FC = () => {
     } else if (mode === 'standup') {
         width = 1320; // Increased by 10%
         height = 920; // Increased by 20%
+    } else if (mode === 'tools') {
+        width = 900;
+        height = 700;
     }
 
     if (instance && instance.board && instance.board.ui) {
@@ -638,6 +642,9 @@ const App: React.FC = () => {
           <button className="menu-button" onClick={() => openModal('calendar')}>
             📅 カレンダー操作
           </button>
+          <button className="menu-button" onClick={() => openModal('tools')}>
+            🔧 便利ツール
+          </button>
           <button className="menu-button secondary" onClick={() => openModal('settings')}>
             ⚙️ 設定
           </button>
@@ -704,6 +711,9 @@ const App: React.FC = () => {
       )}
       {viewMode === 'calendar' && (
         <CalendarTab settings={settings} onSettingsUpdate={handleSettingsUpdate} />
+      )}
+      {viewMode === 'tools' && (
+        <ToolsTab />
       )}
       {viewMode === 'settings' && (
         <SettingsTab settings={settings} onSettingsUpdate={handleSettingsUpdate} />
