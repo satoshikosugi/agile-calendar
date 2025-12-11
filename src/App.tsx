@@ -222,10 +222,13 @@ const App: React.FC = () => {
                       // Keep track of consecutive empty selections to prevent premature stopping
                       let emptySelectionCount = 0;
                       let isPolling = false;
+                      let stableCycles = 0;
 
-                      intervalId = setInterval(async () => {
+                      const poll = async () => {
                           if (isPolling) return;
                           isPolling = true;
+                          let nextPollDelay = 1000; // Default delay: 1 second
+
                           try {
                               // Re-fetch selection to get current positions
                               // Use withRetry to handle Rate Limits during drag
@@ -238,11 +241,12 @@ const App: React.FC = () => {
                               // Handle empty selection grace period
                               if (currentSelection.length === 0) {
                                   emptySelectionCount++;
-                                  if (emptySelectionCount < 5) { // Wait for 5 consecutive empty polls (250ms)
+                                  if (emptySelectionCount < 2) { // Wait for 2 consecutive empty polls (2s)
+                                      intervalId = setTimeout(poll, 1000);
                                       return;
                                   }
                                   // If we reached here, it's truly empty (Drop detected)
-                                  console.log('No items selected for 250ms. Processing drops and stopping loop.');
+                                  console.log('No items selected for 2s. Processing drops and stopping loop.');
                                   
                                   const droppedItems: any[] = [];
                                   for (const [id, tracked] of trackedItemsRef.current.entries()) {
@@ -261,10 +265,9 @@ const App: React.FC = () => {
                                       await handleTaskMove(droppedItems);
                                   }
 
-                                  clearInterval(intervalId);
                                   intervalId = null;
                                   trackedItemsRef.current.clear();
-                                  return;
+                                  return; // Stop loop
                               }
                               
                               // Reset counter if we found items
@@ -272,6 +275,7 @@ const App: React.FC = () => {
 
                               const currentIds = new Set(currentSelection.map((i: any) => i.id));
                               const itemsToMove: any[] = [];
+                              let hasMovement = false;
 
                               // Check tracked items
                               for (const item of currentSelection) {
@@ -281,6 +285,7 @@ const App: React.FC = () => {
                                       console.log('Tracking new item:', item.id);
                                       tracked = { x: item.x, y: item.y, stableCount: 0, type: item.type };
                                       trackedItemsRef.current.set(item.id, tracked);
+                                      hasMovement = true;
                                   } else {
                                       // Check movement
                                       const dx = Math.abs(tracked.x - item.x);
@@ -293,20 +298,21 @@ const App: React.FC = () => {
                                           // even if the movement was small
                                           tracked.x = item.x;
                                           tracked.y = item.y;
-
-                                          // console.log(`Item ${item.id} stable count: ${tracked.stableCount}`);
-                                          // Trigger move if stable for ~1 second (4 * 250ms = 1000ms)
-                                          if (tracked.stableCount === 4) { 
-                                              if (item.type === 'sticky_note') {
-                                                  console.log('Item stable, triggering move:', item.id);
-                                                  itemsToMove.push(item);
-                                              }
-                                          }
+                                          
+                                          // We rely on the 5s debounce in tasksService to handle stability.
+                                          // We don't need to trigger move here if stable, 
+                                          // because the timer is already running from the last move.
                                       } else {
                                           // console.log(`Item ${item.id} moved: dx=${dx}, dy=${dy}`);
                                           tracked.x = item.x;
                                           tracked.y = item.y;
                                           tracked.stableCount = 0;
+                                          hasMovement = true;
+                                          
+                                          // Trigger move on movement to reset the debounce timer
+                                          if (item.type === 'sticky_note') {
+                                              itemsToMove.push(item);
+                                          }
                                       }
                                   }
                               }
@@ -326,6 +332,19 @@ const App: React.FC = () => {
                                           });
                                       }
                                       trackedItemsRef.current.delete(id);
+                                      hasMovement = true;
+                                  }
+                              }
+
+                              // Adaptive Polling Logic
+                              if (hasMovement) {
+                                  stableCycles = 0;
+                                  nextPollDelay = 1000; // 1s polling when moving
+                              } else {
+                                  stableCycles++;
+                                  if (stableCycles > 1) { // Stable for > 1 cycle (1s)
+                                      nextPollDelay = 2500; // Slow polling (2.5s) to save API calls
+                                      // console.log('Selection stable, slowing down polling...');
                                   }
                               }
 
@@ -334,14 +353,15 @@ const App: React.FC = () => {
                                   await handleTaskMove(itemsToMove);
                               }
 
-                              // Stop polling logic moved to top of loop with grace period
+                              // Schedule next poll
+                              intervalId = setTimeout(poll, nextPollDelay);
 
                           } catch (e) {
                               console.error('Error in polling loop:', e);
                               // Only stop loop if it's a fatal error, not a transient one (retry handles rate limits)
                               // But if withRetry failed after max retries, we should probably stop to avoid infinite loop
                               if (intervalId) {
-                                  clearInterval(intervalId);
+                                  clearTimeout(intervalId);
                                   intervalId = null;
                               }
                               // Clear tracking to prevent stale state
@@ -349,7 +369,10 @@ const App: React.FC = () => {
                           } finally {
                               isPolling = false;
                           }
-                      }, 250); // Poll every 250ms to avoid Rate Limits
+                      };
+                      
+                      // Start the loop
+                      poll();
                   }
               }
           };
@@ -381,7 +404,7 @@ const App: React.FC = () => {
     init();
 
     return () => {
-        if (intervalId) clearInterval(intervalId);
+        if (intervalId) clearTimeout(intervalId);
     };
   }, []);
 

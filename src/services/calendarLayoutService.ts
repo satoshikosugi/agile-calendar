@@ -3,7 +3,7 @@ import { Settings, Task } from '../models/types';
 import { withRetry } from '../utils/retry';
 
 // Calendar layout constants
-const CALENDAR_FRAME_WIDTH = 5600;
+const CALENDAR_FRAME_WIDTH = 4200; // 6 columns * 700px (Mon-Fri + Weekly)
 const CALENDAR_FRAME_HEIGHT = 4800;
 const CALENDAR_FRAME_SPACING = 600;
 const CALENDAR_EPOCH_YEAR = 2024; // Fixed reference year for coordinate system
@@ -83,7 +83,7 @@ async function createMonthlyCalendarGrid(
   // Calendar layout constants
   const headerHeight = 160;
   const dayOfWeekHeaderHeight = 80;
-  const colWidth = frameWidth / 8; // 8 columns (7 days + Weekly)
+  const colWidth = frameWidth / 6; // 6 columns (Mon-Fri + Weekly)
   const numWeeks = 6; // Max weeks in a month
   const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
   
@@ -106,16 +106,14 @@ async function createMonthlyCalendarGrid(
   }));
   await withRetry(() => frame.add(title));
   
-  // Day of week headers (Sun, Mon, Tue, Wed, Thu, Fri, Sat, Weekly)
-  const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土', 'Weekly'];
-  const weekendDays = [0, 6]; // Sunday and Saturday
+  // Day of week headers (Mon, Tue, Wed, Thu, Fri, Weekly)
+  const daysOfWeek = ['月', '火', '水', '木', '金', 'Weekly'];
   
   // Parallelize header creation
-  const headerPromises = Array.from({ length: 8 }, async (_, dow) => {
+  const headerPromises = Array.from({ length: 6 }, async (_, dow) => {
     const x = frameX - frameWidth / 2 + colWidth * (dow + 0.5);
     const y = frameY - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight / 2;
-    const isWeekend = weekendDays.includes(dow);
-    const isWeekly = dow === 7;
+    const isWeekly = dow === 5;
     
     const header = await withRetry(() => miro.board.createText({
       content: daysOfWeek[dow],
@@ -125,7 +123,7 @@ async function createMonthlyCalendarGrid(
       style: {
         fontSize: 32,
         fontFamily: 'arial',
-        color: isWeekend ? '#d32f2f' : '#424242',
+        color: '#424242',
         textAlign: 'center',
         fillColor: isWeekly ? '#fff9c4' : 'transparent', // Weekly header is yellow
       },
@@ -135,127 +133,108 @@ async function createMonthlyCalendarGrid(
 
   const headers = await Promise.all(headerPromises);
 
-  // Add headers to frame sequentially to avoid race conditions
+  // Add headers to frame sequentially
   for (const header of headers) {
     await withRetry(() => frame.add(header));
   }
   
-  // Draw grid lines and day numbers
+  const contentStartY = frameY - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight;
+
+  // Draw Grid Lines (Long lines to reduce shape count)
+  const gridLines = [];
+
+  // Vertical Lines (7 lines for 6 columns)
+  for (let i = 0; i <= 6; i++) {
+      const x = frameX - frameWidth / 2 + colWidth * i;
+      // Center of the line
+      const lineX = x; 
+      const lineY = contentStartY + (numWeeks * rowHeight) / 2;
+      
+      const line = await withRetry(() => miro.board.createShape({
+          shape: 'rectangle',
+          x: lineX,
+          y: lineY,
+          width: 8, // Minimum allowed width is 8
+          height: numWeeks * rowHeight,
+          style: {
+              fillColor: '#e0e0e0', // Lighter color for thicker line
+              borderWidth: 0
+          }
+      }));
+      gridLines.push(line);
+  }
+
+  // Horizontal Lines (7 lines for 6 rows)
+  for (let i = 0; i <= numWeeks; i++) {
+      const y = contentStartY + rowHeight * i;
+      // Center of the line
+      const lineY = y;
+      const lineX = frameX;
+      
+      const line = await withRetry(() => miro.board.createShape({
+          shape: 'rectangle',
+          x: lineX,
+          y: lineY,
+          width: frameWidth,
+          height: 8, // Minimum allowed size is 8
+          style: {
+              fillColor: '#e0e0e0', // Lighter color for thicker line
+              borderWidth: 0
+          }
+      }));
+      gridLines.push(line);
+  }
+
+  // Add lines to frame
+  for (const line of gridLines) {
+      await withRetry(() => frame.add(line));
+  }
+  
+  // Draw day numbers
   const firstDay = new Date(year, month, 1);
-  const firstDayOfWeek = firstDay.getDay(); // 0 = Sunday
+  // Adjust firstDayOfWeek to Mon=0, Sun=6
+  const firstDayOfWeek = (firstDay.getDay() + 6) % 7; 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   
-  const contentStartY = frameY - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight;
-  
-  // Draw cells for each day
-  // Optimized Sequential Processing:
-  // We process days sequentially to ensure frame.add() works reliably,
-  // but we parallelize the creation of shapes within a single day to speed it up.
-  for (let week = 0; week < numWeeks; week++) {
-    for (let dow = 0; dow < 8; dow++) {
-      const cellX = frameX - frameWidth / 2 + colWidth * dow;
-      const cellY = contentStartY + rowHeight * week;
-      const isWeekend = weekendDays.includes(dow);
-      const isWeekly = dow === 7;
+  // Process days
+  for (let day = 1; day <= daysInMonth; day++) {
+      const absoluteCol = firstDayOfWeek + (day - 1);
+      const row = Math.floor(absoluteCol / 7);
+      const col = absoluteCol % 7;
+
+      // Skip Sat(5) and Sun(6)
+      if (col >= 5) continue;
+
+      // Calculate position
+      const cellX = frameX - frameWidth / 2 + colWidth * col;
+      const cellY = contentStartY + rowHeight * row;
       
-      // Draw cell background
-      const cellCenterX = cellX + colWidth / 2;
-      const cellCenterY = cellY + rowHeight / 2;
-      
-      if (isWeekly) {
-        // Draw Weekly cell (just a box, no date)
-        const cellShape = await withRetry<any>(() => miro.board.createShape({
-          shape: 'rectangle',
-          x: cellCenterX,
-          y: cellCenterY,
-          width: colWidth,
-          height: rowHeight,
-          style: {
-            borderColor: '#424242',
-            borderWidth: 4,
-            fillColor: '#ffffff',
-          },
+      const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+
+      // Create Day Number Button
+      const dayButton = await withRetry<any>(() => miro.board.createShape({
+            shape: 'round_rectangle',
+            content: `<p><strong>${day}</strong></p>`,
+            x: cellX + 50,
+            y: cellY + 40,
+            width: 60,
+            height: 60,
+            style: {
+            fillColor: '#f5f5f5',
+            borderColor: '#bdbdbd',
+            borderWidth: 2,
+            fontSize: 24,
+            fontFamily: 'arial',
+            color: '#424242',
+            textAlign: 'center',
+            textAlignVertical: 'middle',
+            },
         }));
-        await withRetry(() => frame.add(cellShape));
-        continue;
-      }
-
-      // Calculate day index
-      const dayIndex = (week * 7) + dow - firstDayOfWeek + 1;
-
-      // Only draw day number if this cell should have a day
-      if (dayIndex >= 1 && dayIndex <= daysInMonth) {
-          const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${dayIndex.toString().padStart(2, '0')}`;
-
-          // Parallelize creation of the 3 components for this day
-          const [cellShape, dayButton, divider] = await Promise.all([
-            // 1. Cell Background
-            (async () => {
-                const s = await withRetry<any>(() => miro.board.createShape({
-                    shape: 'rectangle',
-                    x: cellCenterX,
-                    y: cellCenterY,
-                    width: colWidth,
-                    height: rowHeight,
-                    style: {
-                    borderColor: isWeekend ? '#ef9a9a' : '#424242',
-                    borderWidth: 4,
-                    fillColor: isWeekend ? '#fafafa' : '#ffffff',
-                    },
-                }));
-                await withRetry(() => s.setMetadata('appType', 'calendarCell'));
-                await withRetry(() => s.setMetadata('date', dateStr));
-                return s;
-            })(),
-
-            // 2. Day Number Button
-            (async () => {
-                const s = await withRetry<any>(() => miro.board.createShape({
-                    shape: 'round_rectangle',
-                    content: `<p><strong>${dayIndex}</strong></p>`,
-                    x: cellX + 50,
-                    y: cellY + 40,
-                    width: 60,
-                    height: 60,
-                    style: {
-                    fillColor: '#f5f5f5',
-                    borderColor: isWeekend ? '#ef9a9a' : '#bdbdbd',
-                    borderWidth: 2,
-                    fontSize: 24,
-                    fontFamily: 'arial',
-                    color: isWeekend ? '#d32f2f' : '#424242',
-                    textAlign: 'center',
-                    textAlignVertical: 'middle',
-                    },
-                }));
-                await withRetry(() => s.setMetadata('appType', 'calendarCell'));
-                await withRetry(() => s.setMetadata('date', dateStr));
-                await withRetry(() => s.setMetadata('isDayNumber', true));
-                return s;
-            })(),
-
-            // 3. Divider Line
-            (async () => {
-                return await withRetry(() => miro.board.createShape({
-                    shape: 'rectangle',
-                    x: cellCenterX,
-                    y: cellCenterY,
-                    width: 8,
-                    height: rowHeight - 16,
-                    style: {
-                    borderWidth: 0,
-                    fillColor: '#e0e0e0',
-                    },
-                }));
-            })()
-          ]);
-          
-          // Add to frame sequentially to ensure hierarchy is correct
-          await withRetry(() => frame.add(cellShape));
-          await withRetry(() => frame.add(dayButton));
-          await withRetry(() => frame.add(divider));
-      }
-    }
+        await withRetry(() => dayButton.setMetadata('appType', 'calendarCell'));
+        await withRetry(() => dayButton.setMetadata('date', dateStr));
+        await withRetry(() => dayButton.setMetadata('isDayNumber', true));
+        
+        await withRetry(() => frame.add(dayButton));
   }
 }
 
@@ -336,18 +315,25 @@ export async function calculateTaskPositionsForDate(
   
   const headerHeight = 160;
   const dayOfWeekHeaderHeight = 80;
-  const colWidth = frameWidth / 8;
+  const colWidth = frameWidth / 6; // 6 columns
   const numWeeks = 6;
   const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
   
   const firstDay = new Date(year, month, 1);
-  const firstDayOfWeek = firstDay.getDay();
+  // Adjust firstDayOfWeek to Mon=0, Sun=6
+  const firstDayOfWeek = (firstDay.getDay() + 6) % 7;
   const daysSinceFirstOfMonth = day - 1;
-  const totalDayOffset = firstDayOfWeek + daysSinceFirstOfMonth;
+  const absoluteCol = firstDayOfWeek + daysSinceFirstOfMonth;
   
-  const weekRow = Math.floor(totalDayOffset / 7);
-  const dayOfWeek = totalDayOffset % 7;
+  const weekRow = Math.floor(absoluteCol / 7);
+  const dayOfWeek = absoluteCol % 7;
   
+  // If weekend, skip (or handle gracefully)
+  if (dayOfWeek >= 5) {
+      console.warn(`Task on weekend ${date} cannot be placed in grid.`);
+      return new Map();
+  }
+
   const contentStartY = frameY - frameHeight / 2 + headerHeight + dayOfWeekHeaderHeight;
   
   const cellX = frameX - frameWidth / 2 + colWidth * dayOfWeek;
@@ -417,11 +403,13 @@ export async function calculateTaskPosition(
   // Try to find the actual frame on the board first
   let frameX = 0;
   let frameY = 0;
+  let actualFrameWidth = CALENDAR_FRAME_WIDTH;
   const frame = await getCalendarFrame(year, month);
 
   if (frame) {
     frameX = frame.x;
     frameY = frame.y;
+    actualFrameWidth = frame.width;
   } else {
     // Fallback to calculation based on fixed epoch
     // Calculate month difference to determine which frame
@@ -439,24 +427,61 @@ export async function calculateTaskPosition(
   }
   
   // Frame constants
-  const frameWidth = CALENDAR_FRAME_WIDTH;
+  const frameWidth = actualFrameWidth;
   const frameHeight = CALENDAR_FRAME_HEIGHT;
   
   // Calculate position within the monthly calendar grid
   
   // Find which week and day of week this date is
   const firstDay = new Date(year, month, 1);
-  const firstDayOfWeek = firstDay.getDay();
-  const daysSinceFirstOfMonth = day - 1;
-  const totalDayOffset = firstDayOfWeek + daysSinceFirstOfMonth;
   
-  const weekRow = Math.floor(totalDayOffset / 7);
-  const dayOfWeek = totalDayOffset % 7;
+  // Determine layout based on width
+  const STANDARD_COL_WIDTH = 700;
+  const numCols = Math.round(frameWidth / STANDARD_COL_WIDTH);
+  const colWidth = frameWidth / numCols;
+  
+  let absoluteCol = 0;
+  
+  if (numCols === 8) {
+      // Old Layout: Sun(0)..Sat(6), Weekly(7)
+      const firstDayOfWeek = firstDay.getDay(); // Sun=0
+      // const daysSinceFirstOfMonth = day - 1;
+      // absoluteCol = firstDayOfWeek + daysSinceFirstOfMonth;
+      
+      // If absoluteCol hits Weekly column (7, 15, 23...), we need to skip it?
+      // No, in Old Layout, Weekly is a separate column at the end of the row.
+      // But the date logic was: dayIndex = row * 7 + col - firstDayOfWeek + 1
+      // So dates are contiguous in the first 7 columns.
+      
+      // We need to map date -> (row, col)
+      // dayIndex = row * 7 + col - firstDayOfWeek + 1
+      // => row * 7 + col = dayIndex + firstDayOfWeek - 1
+      const targetIndex = day - 1 + firstDayOfWeek;
+      const row = Math.floor(targetIndex / 7);
+      const col = targetIndex % 7;
+      
+      // This maps to 0..6. Weekly is 7.
+      // So tasks never go to Weekly automatically unless we have special logic.
+      absoluteCol = row * 8 + col; // 8 columns in grid
+      
+  } else {
+      // New Layout: Mon(0)..Fri(4), Weekly(5)
+      // Mon=0, Sun=6.
+      const firstDayOfWeek = (firstDay.getDay() + 6) % 7;
+      // const daysSinceFirstOfMonth = day - 1;
+      
+      // dayIndex = absoluteCol - firstDayOfWeek + 1
+      // => absoluteCol = dayIndex + firstDayOfWeek - 1
+      absoluteCol = day - 1 + firstDayOfWeek;
+  }
+  
+  const weekRow = Math.floor(absoluteCol / 7);
+  const dayOfWeek = absoluteCol % 7;
   
   // Calendar layout constants (must match createMonthlyCalendarGrid)
   const headerHeight = 160;
   const dayOfWeekHeaderHeight = 80;
-  const colWidth = frameWidth / 8;
+  // const colWidth = frameWidth / 6; // Already calculated above
   const numWeeks = 6;
   const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
   
@@ -523,16 +548,17 @@ export async function calculatePersonalSchedulePosition(
   const frameHeight = CALENDAR_FRAME_HEIGHT;
   
   const firstDay = new Date(year, month, 1);
-  const firstDayOfWeek = firstDay.getDay();
+  // Adjust firstDayOfWeek to Mon=0, Sun=6
+  const firstDayOfWeek = (firstDay.getDay() + 6) % 7;
   const daysSinceFirstOfMonth = day - 1;
-  const totalDayOffset = firstDayOfWeek + daysSinceFirstOfMonth;
+  const absoluteCol = firstDayOfWeek + daysSinceFirstOfMonth;
   
-  const weekRow = Math.floor(totalDayOffset / 7);
-  const dayOfWeek = totalDayOffset % 7;
+  const weekRow = Math.floor(absoluteCol / 7);
+  const dayOfWeek = absoluteCol % 7;
   
   const headerHeight = 160;
   const dayOfWeekHeaderHeight = 80;
-  const colWidth = frameWidth / 8;
+  const colWidth = frameWidth / 6; // 6 columns
   const numWeeks = 6;
   const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
   
@@ -598,7 +624,10 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
         const top = f.y - f.height / 2;
         const bottom = f.y + f.height / 2;
         
-        const isInside = x >= left && x <= right && y >= top && y <= bottom;
+        // Add buffer for edge drops (e.g. 50px)
+        const BUFFER = 50;
+        const isInside = x >= left - BUFFER && x <= right + BUFFER && y >= top - BUFFER && y <= bottom + BUFFER;
+
         if (isInside) {
             console.log(`Found frame match: ${f.title} [${left}, ${right}, ${top}, ${bottom}]`);
         }
@@ -636,7 +665,12 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
           const headerHeight = frameHeight * (160 / ORIGINAL_HEIGHT);
           const dayOfWeekHeaderHeight = frameHeight * (80 / ORIGINAL_HEIGHT);
           
-          const colWidth = frameWidth / 8; // 8 columns (7 days + Weekly)
+          // Determine columns based on width (Standard col width is 700)
+          // Old frames (5600) have 8 cols. New frames (4200) have 6 cols.
+          const STANDARD_COL_WIDTH = 700;
+          const numCols = Math.round(frameWidth / STANDARD_COL_WIDTH);
+          const colWidth = frameWidth / numCols;
+          
           const numWeeks = 6;
           const rowHeight = (frameHeight - headerHeight - dayOfWeekHeaderHeight) / numWeeks;
           
@@ -646,71 +680,84 @@ export async function getDateFromPosition(x: number, y: number, item?: any, know
           const relX = x - (frame.x - frameWidth / 2);
           const relY = y - contentStartY;
           
-          if (relX >= 0 && relX <= frameWidth && relY >= 0 && relY <= numWeeks * rowHeight) {
-              const col = Math.floor(relX / colWidth);
-              const row = Math.floor(relY / rowHeight);
+          // Relaxed bounds check: Allow drops anywhere within the frame (including headers)
+          // We already confirmed the point is roughly inside the frame via Strategy B.
+          // Just clamp the coordinates to the grid.
+          
+          // Calculate row/col (can be negative or > max if in header/footer)
+          let col = Math.floor(relX / colWidth);
+          let row = Math.floor(relY / rowHeight);
+          
+          // Clamp to valid grid range
+          // This ensures drops in the header map to Row 0, and drops in footer map to Last Row
+          col = Math.max(0, Math.min(col, numCols - 1));
+          row = Math.max(0, Math.min(row, numWeeks - 1));
+          
+          // Handle Weekly column (last column)
+          // We now ALLOW drops in the Weekly column, mapping them to the corresponding date (usually Saturday)
+          // This ensures that tasks dropped in the rightmost column are not ignored.
+          /*
+          if (col === numCols - 1) {
+              console.log('Dropped in Weekly column - ignoring for now');
+              return null;
+          }
+          */
+
+          // Calculate Date
+              const firstDay = new Date(year, month, 1);
               
-              // Handle Weekly column (col 7)
-              if (col === 7) {
-                  console.log('Dropped in Weekly column - ignoring for now');
-                  return null;
+              // Adjust firstDayOfWeek logic based on layout
+              // If 8 cols (Old): Sun(0)..Sat(6), Weekly(7). firstDayOfWeek is standard (Sun=0).
+              // If 6 cols (New): Mon(0)..Fri(4), Weekly(5). firstDayOfWeek needs adjustment (Mon=0).
+              
+              let dayIndex = -1;
+              
+              if (numCols === 8) {
+                  // Old Layout: Sun, Mon, Tue, Wed, Thu, Fri, Sat, Weekly
+                  const firstDayOfWeek = firstDay.getDay(); // Sun=0
+                  // absoluteCol = row * 7 + col? No, row * 7 is for 7-day weeks.
+                  // But the grid has 8 columns.
+                  // Actually old logic was: dayIndex = row * 7 + col - firstDayOfWeek + 1
+                  // And it skipped col 7 (Weekly).
+                  if (col < 7) {
+                      dayIndex = row * 7 + col - firstDayOfWeek + 1;
+                  }
+              } else {
+                  // New Layout: Mon, Tue, Wed, Thu, Fri, Weekly
+                  // Skips Sat/Sun.
+                  // Mon=0, Sun=6.
+                  const firstDayOfWeek = (firstDay.getDay() + 6) % 7; 
+                  
+                  // absoluteCol = row * 7 + col?
+                  // No, we need to map grid col (0-4) to absolute day offset.
+                  // Grid Col 0 = Mon.
+                  // If first day is Wed (2), then absolute col of 1st is 2.
+                  // Grid Col 0 (Mon) of that week is absolute col 0.
+                  
+                  // absoluteCol = row * 7 + col
+                  const absoluteCol = row * 7 + col;
+                  dayIndex = absoluteCol - firstDayOfWeek + 1;
               }
 
-              // Calculate Date
-              const firstDay = new Date(year, month, 1);
-              const firstDayOfWeek = firstDay.getDay(); // 0 = Sunday
+              // Allow overflow/underflow to handle drops in empty cells (prev/next month)
+              // e.g. Dropping in the 6th row of Dec might map to Jan
+              const targetDate = new Date(year, month, dayIndex);
+              const mStr = (targetDate.getMonth() + 1).toString().padStart(2, '0');
+              const dStr = targetDate.getDate().toString().padStart(2, '0');
+              const dateStr = `${targetDate.getFullYear()}-${mStr}-${dStr}`;
               
-              // dayIndex = row * 7 + col - firstDayOfWeek + 1
-              const dayIndex = row * 7 + col - firstDayOfWeek + 1;
-              const daysInMonth = new Date(year, month + 1, 0).getDate();
-              
-              if (dayIndex >= 1 && dayIndex <= daysInMonth) {
-                  const mStr = (month + 1).toString().padStart(2, '0');
-                  const dStr = dayIndex.toString().padStart(2, '0');
-                  const dateStr = `${year}-${mStr}-${dStr}`;
-                  console.log(`Found date via Math Calculation: ${dateStr} (row=${row}, col=${col})`);
-                  return dateStr;
-              } else {
-                  console.log(`Math calculated dayIndex ${dayIndex} which is out of range (1-${daysInMonth})`);
-              }
-          }
+              // console.log(`Found date via Math Calculation: ${dateStr} (row=${row}, col=${col}, dayIndex=${dayIndex})`);
+              return dateStr;
+          // }
       }
   } catch (e) {
       console.warn('Error performing math calculation for date:', e);
   }
 
-  // Strategy D: Hit Testing (Fallback)
-  // Only use this if math failed (e.g. weird frame title or layout)
-  try {
-      console.log('Math strategy failed or returned no date, trying Hit Testing...');
-      const children = await withRetry<any[]>(() => frame.getChildren(), undefined, 'frame.getChildren');
-      // Filter for shapes (cells) that contain the point
-      const candidates = children.filter((c: any) => {
-          if (c.type !== 'shape') return false;
-          const left = c.x - c.width / 2;
-          const right = c.x + c.width / 2;
-          const top = c.y - c.height / 2;
-          const bottom = c.y + c.height / 2;
-          return x >= left && x <= right && y >= top && y <= bottom;
-      });
-
-      for (const cell of candidates) {
-          try {
-              const appType = await withRetry(() => cell.getMetadata('appType'), undefined, 'cell.getMetadata(appType)');
-              if (appType === 'calendarCell') {
-                  const date = await withRetry(() => cell.getMetadata('date'), undefined, 'cell.getMetadata(date)');
-                  if (date) {
-                      console.log(`Found calendar cell via hit-testing at (${x}, ${y}) with date ${date}`);
-                      return date as string;
-                  }
-              }
-          } catch (e) {
-              // ignore metadata errors
-          }
-      }
-  } catch (e) {
-      console.warn('Error performing hit testing for calendar cells:', e);
-  }
+  // Strategy D: Hit Testing (Fallback) - REMOVED
+  // We removed individual cell shapes to optimize performance, so hit-testing against them is no longer possible/useful.
+  // Also, fetching frame.getChildren() is too expensive (API rate limits).
+  // If Math strategy fails, we simply cannot determine the date.
   
   return null;
 }
