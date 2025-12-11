@@ -10,16 +10,16 @@ interface OptimizationResult {
 /**
  * Traverse all connectors from selected objects and get all connected objects
  */
-async function traverseConnectedObjects(startItemId: string, visited: Set<string>, miro: any): Promise<Set<string>> {
-  if (visited.has(startItemId)) {
+async function traverseConnectedObjects(itemId: string, visited: Set<string>, miro: any): Promise<Set<string>> {
+  if (visited.has(itemId)) {
     return visited;
   }
   
-  visited.add(startItemId);
+  visited.add(itemId);
   
   try {
     // Get the item by ID
-    const items = await miro.board.get({ id: startItemId });
+    const items = await miro.board.get({ id: itemId });
     if (items.length === 0) {
       return visited;
     }
@@ -33,20 +33,20 @@ async function traverseConnectedObjects(startItemId: string, visited: Set<string
       // For each connector, find the connected item and traverse it
       for (const connector of connectors) {
         // Get the other end of the connector
-        const startItemId = connector.start?.item;
-        const endItemId = connector.end?.item;
+        const connectorStartId = connector.start?.item;
+        const connectorEndId = connector.end?.item;
         
         // Traverse both ends
-        if (startItemId && !visited.has(startItemId)) {
-          await traverseConnectedObjects(startItemId, visited, miro);
+        if (connectorStartId && !visited.has(connectorStartId)) {
+          await traverseConnectedObjects(connectorStartId, visited, miro);
         }
-        if (endItemId && !visited.has(endItemId)) {
-          await traverseConnectedObjects(endItemId, visited, miro);
+        if (connectorEndId && !visited.has(connectorEndId)) {
+          await traverseConnectedObjects(connectorEndId, visited, miro);
         }
       }
     }
   } catch (error) {
-    console.warn(`Could not traverse item ${startItemId}:`, error);
+    console.warn(`Could not traverse item ${itemId}:`, error);
   }
   
   return visited;
@@ -171,28 +171,28 @@ export async function optimizeConnectors(): Promise<OptimizationResult> {
         
         for (const connector of connectors) {
           // Only optimize connectors where both ends are in our set
-          const startItemId = connector.start?.item;
-          const endItemId = connector.end?.item;
+          const connectorStartId = connector.start?.item;
+          const connectorEndId = connector.end?.item;
           
-          if (!startItemId || !endItemId) {
+          if (!connectorStartId || !connectorEndId) {
             continue;
           }
           
-          if (!allConnectedObjects.has(startItemId) || !allConnectedObjects.has(endItemId)) {
+          if (!allConnectedObjects.has(connectorStartId) || !allConnectedObjects.has(connectorEndId)) {
             continue;
           }
           
           // Get positions
-          const startPos = itemPositions.get(startItemId);
-          const endPos = itemPositions.get(endItemId);
+          const startPos = itemPositions.get(connectorStartId);
+          const endPos = itemPositions.get(connectorEndId);
           
           if (!startPos || !endPos) {
             continue;
           }
           
           // Calculate optimal snap positions
-          const startConnections = itemConnections.get(startItemId) || [];
-          const endConnections = itemConnections.get(endItemId) || [];
+          const startConnections = itemConnections.get(connectorStartId) || [];
+          const endConnections = itemConnections.get(connectorEndId) || [];
           
           const startSnapTo = calculateOptimalSnapPosition(
             startPos.x,
@@ -218,8 +218,8 @@ export async function optimizeConnectors(): Promise<OptimizationResult> {
           // Update tracking
           startConnections.push({ angle, snapTo: startSnapTo });
           endConnections.push({ angle: angle + 180, snapTo: endSnapTo });
-          itemConnections.set(startItemId, startConnections);
-          itemConnections.set(endItemId, endConnections);
+          itemConnections.set(connectorStartId, startConnections);
+          itemConnections.set(connectorEndId, endConnections);
           
           // Update connector if needed
           let needsUpdate = false;
