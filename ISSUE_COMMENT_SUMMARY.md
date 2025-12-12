@@ -18,7 +18,7 @@
 
 **Card化での改善**:
 - 基本情報（title, status, dates）のメタデータアクセスが不要に
-- **ただし約25-50%の削減にとどまる**（150 creditsから75-100 creditsへ）
+- **ただし約25-50%の削減にとどまる**（200 creditsから100-150 creditsへ）
 - アプリ固有データ（devPlan, roles, externalParticipants等）は引き続きメタデータが必要
 
 ### 3. 移行コストが極めて大きい ⚠️

@@ -32,6 +32,7 @@
 ### Card の基本機能
 
 ```typescript
+// Miro SDK v2 の Card インターフェース（@mirohq/websdk-types より）
 interface Card extends BaseItem {
   type: "card";
   width: number;
