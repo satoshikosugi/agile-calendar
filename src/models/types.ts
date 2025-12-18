@@ -1,5 +1,7 @@
 // Data models based on the specification in develop.md
 
+import { LLMConfig } from './llmTypes';
+
 export type TaskStatus = 'Draft' | 'Planned' | 'Done';
 export type DevPlanPhase = 'Draft' | 'Phase1Planned' | 'Phase2Fixed';
 export type DevMode = 'NoDev' | 'Tracks' | 'AllDev';
@@ -128,4 +130,5 @@ export interface Settings {
     duration: number; // minutes
   };
   recurringTasks: RecurringTask[];
+  llmConfig?: LLMConfig; // LLM configuration for AI diagram generation
 }

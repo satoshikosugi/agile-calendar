@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Settings, ExternalTeam } from '../../models/types';
+import { LLMConfig } from '../../models/llmTypes';
 import './SettingsTab.css';
 
 interface SettingsTabProps {
@@ -246,11 +247,152 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate })
       </div>
 
       <div className="section">
+        <h2>🤖 LLM設定（生成AI）</h2>
+        <p className="help-text">
+          自然言語から図を生成するための LLM 接続設定です。
+        </p>
+
+        <div className="form-group">
+          <label>LLM プロバイダー</label>
+          <select
+            value={settings.llmConfig?.provider || 'ollama'}
+            onChange={(e) => {
+              const provider = e.target.value as 'ollama' | 'openai';
+              onSettingsUpdate({
+                ...settings,
+                llmConfig: {
+                  ...(settings.llmConfig || {
+                    endpoint: 'http://localhost:11434/api/generate',
+                    model: 'llama3',
+                    temperature: 0.7,
+                    maxTokens: 2000,
+                  }),
+                  provider,
+                },
+              });
+            }}
+          >
+            <option value="ollama">Ollama（ローカル）</option>
+            <option value="openai" disabled>OpenAI（未実装）</option>
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label>エンドポイントURL</label>
+          <input
+            type="text"
+            value={settings.llmConfig?.endpoint || 'http://localhost:11434/api/generate'}
+            onChange={(e) => {
+              onSettingsUpdate({
+                ...settings,
+                llmConfig: {
+                  ...(settings.llmConfig || {
+                    provider: 'ollama',
+                    model: 'llama3',
+                    temperature: 0.7,
+                    maxTokens: 2000,
+                  }),
+                  endpoint: e.target.value,
+                },
+              });
+            }}
+            placeholder="http://localhost:11434/api/generate"
+          />
+          <p className="help-text">
+            Ollama の場合: http://localhost:11434/api/generate
+          </p>
+        </div>
+
+        <div className="form-group">
+          <label>モデル名</label>
+          <input
+            type="text"
+            value={settings.llmConfig?.model || 'llama3'}
+            onChange={(e) => {
+              onSettingsUpdate({
+                ...settings,
+                llmConfig: {
+                  ...(settings.llmConfig || {
+                    provider: 'ollama',
+                    endpoint: 'http://localhost:11434/api/generate',
+                    temperature: 0.7,
+                    maxTokens: 2000,
+                  }),
+                  model: e.target.value,
+                },
+              });
+            }}
+            placeholder="llama3, qwen2.5, deepseek-r1 など"
+          />
+          <p className="help-text">
+            例: llama3, qwen2.5, deepseek-r1 など
+          </p>
+        </div>
+
+        <div className="form-group">
+          <label>Temperature</label>
+          <input
+            type="number"
+            step="0.1"
+            min="0"
+            max="2"
+            value={settings.llmConfig?.temperature || 0.7}
+            onChange={(e) => {
+              onSettingsUpdate({
+                ...settings,
+                llmConfig: {
+                  ...(settings.llmConfig || {
+                    provider: 'ollama',
+                    endpoint: 'http://localhost:11434/api/generate',
+                    model: 'llama3',
+                    maxTokens: 2000,
+                  }),
+                  temperature: parseFloat(e.target.value),
+                },
+              });
+            }}
+          />
+          <p className="help-text">
+            0.0 〜 2.0（低いほど安定、高いほど創造的）
+          </p>
+        </div>
+
+        <div className="form-group">
+          <label>最大トークン数</label>
+          <input
+            type="number"
+            step="100"
+            min="500"
+            max="8000"
+            value={settings.llmConfig?.maxTokens || 2000}
+            onChange={(e) => {
+              onSettingsUpdate({
+                ...settings,
+                llmConfig: {
+                  ...(settings.llmConfig || {
+                    provider: 'ollama',
+                    endpoint: 'http://localhost:11434/api/generate',
+                    model: 'llama3',
+                    temperature: 0.7,
+                  }),
+                  maxTokens: parseInt(e.target.value),
+                },
+              });
+            }}
+          />
+          <p className="help-text">
+            生成する最大トークン数（500 〜 8000）
+          </p>
+        </div>
+      </div>
+
+      <div className="section">
         <h2>設定について</h2>
         <ul className="info-list">
           <li>外部チームは、タスクに参加する可能性のある他部署またはチームです</li>
           <li>設定はMiroボードに保存され、セッションをまたいで永続します</li>
           <li>基準月の変更は、表示されるカレンダーフレームに影響します</li>
+          <li>LLM設定を使用するには、「便利ツール」から「生成AI」機能を利用してください</li>
         </ul>
       </div>
 
