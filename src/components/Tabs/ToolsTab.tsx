@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { optimizeConnectors } from '../../services/connectorOptimizationService';
 import { autoAlignObjects, distributeObjectsEvenly } from '../../services/layoutUtilsService';
+import { loadSettings } from '../../services/settingsService';
+import { Settings } from '../../models/types';
+import AIGenerationPanel from '../AIGenerationPanel';
 import './ToolsTab.css';
 
 const ToolsTab: React.FC = () => {
@@ -8,6 +11,7 @@ const ToolsTab: React.FC = () => {
   const [isAligning, setIsAligning] = useState(false);
   const [isDistributing, setIsDistributing] = useState(false);
   const [status, setStatus] = useState<string>('');
+  const [settings, setSettings] = useState<Settings | null>(null);
 
   // Connector Optimization Settings
   const [allowMovement, setAllowMovement] = useState(true);
@@ -16,6 +20,10 @@ const ToolsTab: React.FC = () => {
 
   // Distribute Settings
   const [distributeSpacingFactor, setDistributeSpacingFactor] = useState(1.5);
+
+  useEffect(() => {
+    loadSettings().then(setSettings);
+  }, []);
 
   const handleOptimizeConnectors = async () => {
     setIsOptimizing(true);
@@ -75,6 +83,10 @@ const ToolsTab: React.FC = () => {
       <p className="tools-description">
         Miroボードをより便利にする各種ツールです。
       </p>
+
+      <div className="section">
+        <AIGenerationPanel llmConfig={settings?.llmConfig} />
+      </div>
 
       <div className="section">
         <h3>コネクタ最適化</h3>
