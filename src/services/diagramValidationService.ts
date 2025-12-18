@@ -1,6 +1,6 @@
 // Diagram JSON Validation Service
 
-import { DiagramJSON, ValidationResult, ValidationError } from '../models/llmTypes';
+import { ValidationResult, ValidationError } from '../models/llmTypes';
 
 /**
  * Validate diagram JSON against schema and business rules

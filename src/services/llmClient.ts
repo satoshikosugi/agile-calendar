@@ -75,9 +75,9 @@ class OllamaClient implements ILLMClient {
  * OpenAI Provider Implementation (stub for future extension)
  */
 class OpenAIClient implements ILLMClient {
-  constructor(private config: LLMConfig) {}
+  constructor(_config: LLMConfig) {}
 
-  async generateDiagram(prompt: string): Promise<LLMResponse> {
+  async generateDiagram(_prompt: string): Promise<LLMResponse> {
     // TODO: Implement OpenAI API integration
     return {
       success: false,
