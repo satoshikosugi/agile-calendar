@@ -24,10 +24,13 @@ export async function autoAlignObjects(): Promise<LayoutResult> {
     // Get selected items
     const selection = await miro.board.getSelection();
     
-    if (selection.length < 2) {
+    // Filter out connectors
+    const itemsToAlign = selection.filter((item: any) => item.type !== 'connector');
+    
+    if (itemsToAlign.length < 2) {
       return {
         success: false,
-        message: '2つ以上のオブジェクトを選択してください。',
+        message: '2つ以上のオブジェクト（コネクタ以外）を選択してください。',
         objectsProcessed: 0,
       };
     }
@@ -36,7 +39,7 @@ export async function autoAlignObjects(): Promise<LayoutResult> {
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
     
-    for (const item of selection) {
+    for (const item of itemsToAlign) {
       minX = Math.min(minX, item.x);
       maxX = Math.max(maxX, item.x);
       minY = Math.min(minY, item.y);
@@ -55,29 +58,29 @@ export async function autoAlignObjects(): Promise<LayoutResult> {
       // Align to vertical center
       const centerY = (minY + maxY) / 2;
       
-      for (const item of selection) {
+      for (const item of itemsToAlign) {
         item.y = centerY;
         await item.sync();
       }
       
       return {
         success: true,
-        message: `${selection.length}個のオブジェクトを垂直方向に整列しました。`,
-        objectsProcessed: selection.length,
+        message: `${itemsToAlign.length}個のオブジェクトを垂直方向に整列しました。`,
+        objectsProcessed: itemsToAlign.length,
       };
     } else {
       // Align to horizontal center
       const centerX = (minX + maxX) / 2;
       
-      for (const item of selection) {
+      for (const item of itemsToAlign) {
         item.x = centerX;
         await item.sync();
       }
       
       return {
         success: true,
-        message: `${selection.length}個のオブジェクトを水平方向に整列しました。`,
-        objectsProcessed: selection.length,
+        message: `${itemsToAlign.length}個のオブジェクトを水平方向に整列しました。`,
+        objectsProcessed: itemsToAlign.length,
       };
     }
   } catch (error: any) {
@@ -93,7 +96,7 @@ export async function autoAlignObjects(): Promise<LayoutResult> {
 /**
  * Distribute selected objects evenly with equal spacing
  */
-export async function distributeObjectsEvenly(): Promise<LayoutResult> {
+export async function distributeObjectsEvenly(spacingFactor: number = 1.5): Promise<LayoutResult> {
   try {
     const { instance: miro } = await getMiro();
     
@@ -108,10 +111,13 @@ export async function distributeObjectsEvenly(): Promise<LayoutResult> {
     // Get selected items
     const selection = await miro.board.getSelection();
     
-    if (selection.length < 3) {
+    // Filter out connectors
+    const itemsToDistribute = selection.filter((item: any) => item.type !== 'connector');
+    
+    if (itemsToDistribute.length < 3) {
       return {
         success: false,
-        message: '3つ以上のオブジェクトを選択してください。',
+        message: '3つ以上のオブジェクト（コネクタ以外）を選択してください。',
         objectsProcessed: 0,
       };
     }
@@ -120,7 +126,7 @@ export async function distributeObjectsEvenly(): Promise<LayoutResult> {
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
     
-    for (const item of selection) {
+    for (const item of itemsToDistribute) {
       minX = Math.min(minX, item.x);
       maxX = Math.max(maxX, item.x);
       minY = Math.min(minY, item.y);
@@ -135,39 +141,54 @@ export async function distributeObjectsEvenly(): Promise<LayoutResult> {
     
     if (distributeHorizontally) {
       // Sort by X position
-      const sortedItems = [...selection].sort((a, b) => a.x - b.x);
+      const sortedItems = [...itemsToDistribute].sort((a, b) => a.x - b.x);
       
-      // Calculate spacing
-      const spacing = rangeX / (sortedItems.length - 1);
+      // Calculate average width
+      const avgWidth = sortedItems.reduce((sum, item) => sum + item.width, 0) / sortedItems.length;
+      
+      // Calculate spacing based on factor (center-to-center distance)
+      // If factor is 1.0, they touch (distance = width)
+      // If factor is 1.5, gap is 0.5 * width
+      const distance = avgWidth * spacingFactor;
+      
+      // Start from the leftmost item's position (or center the whole group?)
+      // Let's keep the leftmost item where it is
+      const startX = sortedItems[0].x;
       
       // Distribute evenly
       for (let i = 0; i < sortedItems.length; i++) {
-        sortedItems[i].x = minX + (i * spacing);
+        sortedItems[i].x = startX + (i * distance);
         await sortedItems[i].sync();
       }
       
       return {
         success: true,
-        message: `${selection.length}個のオブジェクトを水平方向に均等配置しました。`,
-        objectsProcessed: selection.length,
+        message: `${itemsToDistribute.length}個のオブジェクトを水平方向に均等配置しました（間隔: ${spacingFactor}倍）。`,
+        objectsProcessed: itemsToDistribute.length,
       };
     } else {
       // Sort by Y position
-      const sortedItems = [...selection].sort((a, b) => a.y - b.y);
+      const sortedItems = [...itemsToDistribute].sort((a, b) => a.y - b.y);
       
-      // Calculate spacing
-      const spacing = rangeY / (sortedItems.length - 1);
+      // Calculate average height
+      const avgHeight = sortedItems.reduce((sum, item) => sum + item.height, 0) / sortedItems.length;
+      
+      // Calculate spacing based on factor
+      const distance = avgHeight * spacingFactor;
+      
+      // Start from the topmost item's position
+      const startY = sortedItems[0].y;
       
       // Distribute evenly
       for (let i = 0; i < sortedItems.length; i++) {
-        sortedItems[i].y = minY + (i * spacing);
+        sortedItems[i].y = startY + (i * distance);
         await sortedItems[i].sync();
       }
       
       return {
         success: true,
-        message: `${selection.length}個のオブジェクトを垂直方向に均等配置しました。`,
-        objectsProcessed: selection.length,
+        message: `${itemsToDistribute.length}個のオブジェクトを垂直方向に均等配置しました（間隔: ${spacingFactor}倍）。`,
+        objectsProcessed: itemsToDistribute.length,
       };
     }
   } catch (error: any) {
