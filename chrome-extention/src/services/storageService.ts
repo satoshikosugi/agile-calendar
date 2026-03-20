@@ -106,7 +106,7 @@ export async function saveTasks(tasks: Task[]): Promise<void> {
 
 export async function createTask(task: Task): Promise<Task> {
   const tasks = await loadTasks();
-  const newTask = { ...task, id: task.id || `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` };
+  const newTask = { ...task, id: task.id || `task-${Date.now()}-${Math.random().toString(36).substring(2, 11)}` };
   tasks.push(newTask);
   await saveTasks(tasks);
   return newTask;
