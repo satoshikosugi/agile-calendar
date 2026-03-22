@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Task, Settings, DevMode, PersonalSchedule, PersonalScheduleType, TaskStatus } from '../../models/types';
 import { loadTasks, updateTask, createTask, deleteTask } from '../../services/storageService';
 import { WORKING_START_MIN, WORKING_END_MIN, parseTime, formatTime, getDevEvents } from '../../services/scheduleService';
+import { rearrangeTasksForMonth } from '../../services/tasksService';
+import { hasMiroSettings } from '../../services/calendarLayoutService';
+import { extractBoardId } from '../../services/miroApiService';
 import Timetable, { TimetableColumnGroup } from '../Timetable';
 import './StandupTab.css';
 
@@ -509,6 +512,35 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
 
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [rescheduleDate, setRescheduleDate] = useState('');
+  const [isSyncingMiro, setIsSyncingMiro] = useState(false);
+  const [miroSyncMessage, setMiroSyncMessage] = useState('');
+
+  const boardId = extractBoardId(settings.miroBoardId || '');
+  const token = settings.miroApiToken || '';
+  const miroConfigured = hasMiroSettings(token, boardId);
+
+  const handleSyncToMiro = async () => {
+    if (!miroConfigured) {
+      alert('Miro API トークンとボードIDを設定タブで設定してください。');
+      return;
+    }
+    const yearMonth = filterDate.substring(0, 7);
+    setIsSyncingMiro(true);
+    setMiroSyncMessage('Miroに反映中...');
+    try {
+      const errs = await rearrangeTasksForMonth(yearMonth, settings, boardId, token, setMiroSyncMessage);
+      if (errs.length > 0) {
+        alert(`Miroへの反映中に ${errs.length} 件のエラーが発生しました:\n${errs.slice(0, 5).join('\n')}`);
+      } else {
+        setMiroSyncMessage('✅ Miroに反映しました');
+        setTimeout(() => setMiroSyncMessage(''), 3000);
+      }
+    } catch (e) {
+      alert('Miroへの反映に失敗しました: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setIsSyncingMiro(false);
+    }
+  };
 
   const toggleSelect = (taskId: string) => {
     const newSelected = new Set(selectedTaskIds);
@@ -596,7 +628,20 @@ const StandupTab: React.FC<StandupTabProps> = ({ settings, onSettingsUpdate, onE
               }}>
                 個人予定追加
               </button>
+              {miroConfigured && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleSyncToMiro}
+                  disabled={isSyncingMiro}
+                  title={`${filterDate.substring(0, 7)} のタスクをMiroカレンダーに反映`}
+                >
+                  {isSyncingMiro ? '反映中...' : '📌 Miroに反映'}
+                </button>
+              )}
             </>
+          )}
+          {miroSyncMessage && !isSyncingMiro && (
+            <span style={{ fontSize: '0.85em', color: '#4caf50', marginLeft: '8px' }}>{miroSyncMessage}</span>
           )}
         </div>
       </div>

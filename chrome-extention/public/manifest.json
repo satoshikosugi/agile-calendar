@@ -3,8 +3,7 @@
   "name": "Agile Calendar",
   "version": "1.0.0",
   "description": "アジャイルチームのスタンドアップミーティングを管理するChrome拡張機能",
-  "permissions": ["storage"],
-  "action": {
+  "permissions": ["storage"],  "host_permissions": ["https://api.miro.com/*"],  "action": {
     "default_popup": "index.html",
     "default_icon": {
       "16": "icons/icon16.png",

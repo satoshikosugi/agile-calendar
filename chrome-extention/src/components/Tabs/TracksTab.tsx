@@ -366,11 +366,8 @@ const TracksTab: React.FC<TracksTabProps> = ({ settings, onSettingsUpdate }) => 
   const assignedDevIds = getAssignedDevIds();
   const absentDevIds = new Set(currentAssignment['absent'] || []);
   
-  // Only show Devs in the assignment view
-  const assignableDevs = settings.devs.filter(dev => {
-    const role = settings.roles.find(r => r.id === dev.roleId);
-    return role && (role.name === 'Dev' || role.id === 'role-dev');
-  });
+  // Show all devs in the assignment view
+  const assignableDevs = settings.devs || [];
   
   const unassignedDevs = assignableDevs.filter(dev => !assignedDevIds.has(dev.id) && !absentDevIds.has(dev.id));
   const absentDevs = assignableDevs.filter(dev => absentDevIds.has(dev.id));

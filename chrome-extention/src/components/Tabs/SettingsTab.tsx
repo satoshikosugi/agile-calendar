@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Settings, ExternalTeam } from '../../models/types';
+import { validateConnection, extractBoardId } from '../../services/miroApiService';
 import './SettingsTab.css';
 
 interface SettingsTabProps {
@@ -10,6 +11,10 @@ interface SettingsTabProps {
 const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate }) => {
   const [newTeamName, setNewTeamName] = useState('');
   const [editingTeam, setEditingTeam] = useState<ExternalTeam | null>(null);
+  const [miroToken, setMiroToken] = useState(settings.miroApiToken || '');
+  const [miroBoardUrl, setMiroBoardUrl] = useState(settings.miroBoardId || '');
+  const [miroValidating, setMiroValidating] = useState(false);
+  const [miroValidationMsg, setMiroValidationMsg] = useState('');
 
   const handleAddExternalTeam = () => {
     if (!newTeamName.trim()) return;
@@ -265,6 +270,90 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSettingsUpdate })
             <div className="stat-value">{settings.externalTeams.length}</div>
             <div className="stat-label">外部チーム</div>
           </div>
+        </div>
+      </div>
+
+      <div className="section">
+        <h2>🔗 Miro連携</h2>
+        <p className="help-text" style={{ marginBottom: '16px' }}>
+          カレンダー生成や便利ツールをMiroボードで使用するには、Miro API トークンとボード URL を設定してください。
+          <br />
+          API トークンは <a href="https://developers.miro.com/docs/rest-api-build-your-first-hello-world-app#step-3-get-your-access-token" target="_blank" rel="noreferrer">Miro 開発者ポータル</a> から取得できます。
+        </p>
+
+        <div className="form-group">
+          <label>Miro API トークン</label>
+          <input
+            type="password"
+            value={miroToken}
+            onChange={(e) => setMiroToken(e.target.value)}
+            placeholder="eyJtaXJvLm9yaWdpbi..."
+            style={{ width: '100%', fontFamily: 'monospace', fontSize: '13px' }}
+          />
+          <p className="help-text">個人アクセストークン (PAT) を入力してください。</p>
+        </div>
+
+        <div className="form-group">
+          <label>Miro ボード URL またはボードID</label>
+          <input
+            type="text"
+            value={miroBoardUrl}
+            onChange={(e) => setMiroBoardUrl(e.target.value)}
+            placeholder="https://miro.com/app/board/uXjVNXXXXXX= またはボードID"
+            style={{ width: '100%' }}
+          />
+          <p className="help-text">MiroボードのURLをそのまま貼り付けるか、ボードIDのみ入力してください。</p>
+        </div>
+
+        {miroValidationMsg && (
+          <p style={{
+            padding: '8px 12px',
+            borderRadius: '4px',
+            backgroundColor: miroValidationMsg.startsWith('✅') ? '#d4edda' : '#f8d7da',
+            color: miroValidationMsg.startsWith('✅') ? '#155724' : '#721c24',
+            fontSize: '14px',
+            marginBottom: '12px',
+          }}>
+            {miroValidationMsg}
+          </p>
+        )}
+
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={miroValidating || !miroToken.trim() || !miroBoardUrl.trim()}
+            onClick={async () => {
+              setMiroValidating(true);
+              setMiroValidationMsg('');
+              try {
+                const boardId = extractBoardId(miroBoardUrl);
+                const boardName = await validateConnection(boardId, miroToken.trim());
+                setMiroValidationMsg(`✅ 接続成功: "${boardName}"`);
+              } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                setMiroValidationMsg(`❌ 接続失敗: ${msg}`);
+              } finally {
+                setMiroValidating(false);
+              }
+            }}
+          >
+            {miroValidating ? '確認中...' : '接続テスト'}
+          </button>
+
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={!miroToken.trim() || !miroBoardUrl.trim()}
+            onClick={() => {
+              onSettingsUpdate({
+                ...settings,
+                miroApiToken: miroToken.trim(),
+                miroBoardId: miroBoardUrl.trim(),
+              });
+              setMiroValidationMsg('✅ 設定を保存しました');
+            }}
+          >
+            Miro設定を保存
+          </button>
         </div>
       </div>
     </div>

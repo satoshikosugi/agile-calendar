@@ -6,11 +6,13 @@ import TasksTab from './components/Tabs/TasksTab';
 import TracksTab from './components/Tabs/TracksTab';
 import SettingsTab from './components/Tabs/SettingsTab';
 import StandupTab from './components/Tabs/StandupTab';
+import CalendarTab from './components/Tabs/CalendarTab';
+import ToolsTab from './components/Tabs/ToolsTab';
 import TaskForm from './components/TaskForm';
 import RecurringTaskForm from './components/RecurringTaskForm';
 import './App.css';
 
-type TabType = 'tasks' | 'standup' | 'tracks' | 'settings';
+type TabType = 'tasks' | 'standup' | 'tracks' | 'calendar' | 'tools' | 'settings';
 type ViewMode = 'tabs' | 'task-form' | 'recurring-tasks';
 
 const App: React.FC = () => {
@@ -185,6 +187,18 @@ const App: React.FC = () => {
           👥 トラック
         </button>
         <button
+          className={`tab ${activeTab === 'calendar' ? 'active' : ''}`}
+          onClick={() => setActiveTab('calendar')}
+        >
+          📅 カレンダー
+        </button>
+        <button
+          className={`tab ${activeTab === 'tools' ? 'active' : ''}`}
+          onClick={() => setActiveTab('tools')}
+        >
+          🔧 ツール
+        </button>
+        <button
           className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
           onClick={() => setActiveTab('settings')}
         >
@@ -211,6 +225,12 @@ const App: React.FC = () => {
         )}
         {activeTab === 'tracks' && (
           <TracksTab settings={settings} onSettingsUpdate={handleSettingsUpdate} />
+        )}
+        {activeTab === 'calendar' && (
+          <CalendarTab settings={settings} onSettingsUpdate={handleSettingsUpdate} />
+        )}
+        {activeTab === 'tools' && (
+          <ToolsTab settings={settings} />
         )}
         {activeTab === 'settings' && (
           <SettingsTab settings={settings} onSettingsUpdate={handleSettingsUpdate} />

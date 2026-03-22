@@ -21,7 +21,9 @@ const getDefaultSettings = (): Settings => ({
     startTime: '12:30',
     duration: 60
   },
-  recurringTasks: []
+  recurringTasks: [],
+  miroApiToken: '',
+  miroBoardId: '',
 });
 
 const isChromeExtension = (): boolean => {
@@ -85,6 +87,11 @@ export async function loadSettings(): Promise<Settings> {
     if (!stored.personalSchedules) stored.personalSchedules = {};
     if (!stored.dailyTrackAssignments) stored.dailyTrackAssignments = {};
     if (!stored.dailyAssignmentStatus) stored.dailyAssignmentStatus = {};
+    if (!stored.devs) stored.devs = [];
+    if (!stored.tracks) stored.tracks = [];
+    if (!stored.roles) stored.roles = getDefaultSettings().roles;
+    if (!stored.externalTeams) stored.externalTeams = [];
+    if (!stored.projectHolidays) stored.projectHolidays = [];
     return stored;
   }
   return getDefaultSettings();

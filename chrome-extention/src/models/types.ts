@@ -128,4 +128,7 @@ export interface Settings {
     duration: number; // minutes
   };
   recurringTasks: RecurringTask[];
+  // Miro REST API integration
+  miroApiToken?: string;
+  miroBoardId?: string;
 }
