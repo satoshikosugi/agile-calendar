@@ -114,11 +114,54 @@ async function processBatch(items: any[]) {
                         if (!freshItems || freshItems.length === 0) return;
                         
                         const freshItem = freshItems[0];
-                        const metadata = await freshItem.getMetadata(TASK_METADATA_KEY);
+
+                        // Use coordinates from the event trigger (client-side) if available, otherwise fallback to server-side
+                        // This fixes the issue where board.get() returns stale coordinates during drag operations
+                        const targetX = (typeof item.x === 'number') ? item.x : freshItem.x;
+                        const targetY = (typeof item.y === 'number') ? item.y : freshItem.y;
+
+                        let metadata = await freshItem.getMetadata(TASK_METADATA_KEY);
                         
-                        if (!metadata || !(metadata as Task).id) return;
+                        // Fallback: Notes without Miro metadata (e.g. created by Chrome Extension)
+                        // Build a synthetic Task from position + content so the item can still be moved.
+                        if (!metadata || !(metadata as Task).id) {
+                            // Determine drop date from target coordinates (where the note was dragged to)
+                            const syntheticDate = await getDateFromPosition(targetX, targetY, undefined);
+                            if (!syntheticDate) {
+                                console.warn(`processBatch: Cannot determine date for note ${item.id} at (${targetX}, ${targetY}) – skipping`);
+                                return;
+                            }
+
+                            // Parse note content for task ID / title
+                            const rawContent: string = (freshItem.content as string) ?? '';
+                            const plainText = rawContent.replace(/<[^>]*>/g, '\n');
+                            const idMatch = plainText.match(/agile-task-id:([^\s\n]+)/);
+                            const taskId = idMatch ? idMatch[1] : freshItem.id;
+                            const firstLine = plainText.split('\n').find((l: string) => l.trim() && !l.includes('agile-task-id:')) ?? 'Task';
+
+                            metadata = {
+                                id: taskId,
+                                status: 'Draft',
+                                title: firstLine.substring(0, 50).trim(),
+                                summary: '',
+                                date: syntheticDate,
+                                roles: { designerIds: [], devPlan: { phase: 'Draft', mode: 'NoDev', requiredTrackCount: 0, assignedTrackIds: [] } },
+                                externalParticipants: [],
+                                constraints: { timeLocked: false, rolesLocked: false, externalFixed: false },
+                            } as Task;
+                            console.log(`processBatch: Synthetic task for note ${item.id}: "${(metadata as Task).title}" → ${syntheticDate}`);
+                        }
                         
                         const task = metadata as Task;
+
+                        // Self-heal: Write Miro metadata so subsequent moves use the fast path
+                        const existingMeta = await freshItem.getMetadata(TASK_METADATA_KEY);
+                        if (!existingMeta || !(existingMeta as Task).id) {
+                            try {
+                                await withRetry(() => freshItem.setMetadata(TASK_METADATA_KEY, task), undefined, 'note.setMetadata(heal)');
+                                await withRetry(() => freshItem.setMetadata('appType', 'task'), undefined, 'note.setMetadata(appType)');
+                            } catch (_e) { /* non-fatal */ }
+                        }
                         
                         // Use cached date if available (to handle rapid moves across batches), otherwise use metadata
                         const cachedDate = taskDateCache.get(task.id);
@@ -127,11 +170,6 @@ async function processBatch(items: any[]) {
                         // Track that this task is being moved
                         movedTaskIds.add(task.id);
                         
-                        // Use coordinates from the event trigger (client-side) if available, otherwise fallback to server-side
-                        // This fixes the issue where board.get() returns stale coordinates during drag operations
-                        const targetX = (typeof item.x === 'number') ? item.x : freshItem.x;
-                        const targetY = (typeof item.y === 'number') ? item.y : freshItem.y;
-
                         // FIX: Detach from parent before moving to avoid "child of another item" error
                         // This is necessary because Miro SDK restricts moving items that are children of frames
                         if (freshItem.parentId) {
@@ -374,7 +412,38 @@ export async function reorganizeTasksOnDate(
             // Process only these notes
             const results = await Promise.all(stickyNotes.map(async (note: any) => {
                 try {
-                    const metadata = await note.getMetadata(TASK_METADATA_KEY);
+                    let metadata = await note.getMetadata(TASK_METADATA_KEY);
+
+                    // Fallback: notes without Miro metadata (e.g. created by Chrome Extension).
+                    // Use spatial position to determine if the note belongs to this date.
+                    if (!metadata || !(metadata as Task).id) {
+                        let checkX = note.x;
+                        let checkY = note.y;
+                        if (note.parentId === frame.id) {
+                            checkX = frame.x + note.x;
+                            checkY = frame.y + note.y;
+                        }
+                        const spatialDate = await getDateFromPosition(checkX, checkY, note, frame);
+                        if (spatialDate !== date) return null;
+
+                        // Build synthetic Task so the note can be included in layout
+                        const rawContent: string = (note.content as string) ?? '';
+                        const plainText = rawContent.replace(/<[^>]*>/g, '\n');
+                        const idMatch = plainText.match(/agile-task-id:([^\s\n]+)/);
+                        const taskId = idMatch ? idMatch[1] : note.id;
+                        const firstLine = plainText.split('\n').find((l: string) => l.trim() && !l.includes('agile-task-id:')) ?? 'Task';
+                        metadata = {
+                            id: taskId,
+                            status: 'Draft',
+                            title: firstLine.substring(0, 50).trim(),
+                            summary: '',
+                            date: spatialDate,
+                            roles: { designerIds: [], devPlan: { phase: 'Draft', mode: 'NoDev', requiredTrackCount: 0, assignedTrackIds: [] } },
+                            externalParticipants: [],
+                            constraints: { timeLocked: false, rolesLocked: false, externalFixed: false },
+                        } as Task;
+                    }
+
                     let task = metadata as Task;
                     
                     // Check if metadata matches date
@@ -711,6 +780,9 @@ export async function loadTasks(): Promise<Task[]> {
            }
            tasks.push(task);
         }
+        // Notes created by Chrome Extension (agile-task-id: in content) cannot be loaded
+        // here because we have no access to chrome.storage.local from a Miro board iframe.
+        // They are handled in processBatch / reorganizeTasksOnDate via spatial-position fallback.
       }
     }
     
